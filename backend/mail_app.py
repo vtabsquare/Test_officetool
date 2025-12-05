@@ -25,12 +25,68 @@ print("DEBUG: MAIL_DEFAULT_SENDER =", os.getenv("MAIL_DEFAULT_SENDER"))
 
 
 # ------------------------------
-# ✉️ Email Send via Resend API
+# ✉️ Email Send via Brevo API (formerly Sendinblue)
+# ------------------------------
+def send_email_brevo(subject, recipients, body, html=None):
+    """
+    Send email using Brevo API (HTTP-based, works on Render free tier).
+    Free tier: 300 emails/day, no domain verification required.
+    Requires BREVO_API_KEY env var.
+    """
+    api_key = os.getenv('BREVO_API_KEY')
+    from_email = os.getenv('BREVO_FROM_EMAIL', os.getenv('MAIL_USERNAME', 'noreply@example.com'))
+    from_name = os.getenv('BREVO_FROM_NAME', 'VTab Office Tool')
+    
+    if not api_key:
+        print("[MAIL-BREVO] No BREVO_API_KEY configured", flush=True)
+        return False
+    
+    print(f"[MAIL-BREVO] Sending to {recipients} from {from_email}", flush=True)
+    
+    # Prepare recipients list
+    to_list = recipients if isinstance(recipients, list) else [recipients]
+    to_formatted = [{"email": email} for email in to_list]
+    
+    payload = {
+        "sender": {"name": from_name, "email": from_email},
+        "to": to_formatted,
+        "subject": subject,
+        "textContent": body,
+    }
+    if html:
+        payload["htmlContent"] = html
+    
+    try:
+        response = http_requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            json=payload,
+            timeout=15
+        )
+        
+        if response.status_code in [200, 201]:
+            print(f"[MAIL-BREVO] Email sent successfully: {response.json()}", flush=True)
+            return True
+        else:
+            print(f"[MAIL-BREVO] Failed: {response.status_code} - {response.text}", flush=True)
+            return False
+    except Exception as e:
+        print(f"[MAIL-BREVO] Error: {e}", flush=True)
+        traceback.print_exc()
+        return False
+
+
+# ------------------------------
+# ✉️ Email Send via Resend API (backup)
 # ------------------------------
 def send_email_resend(subject, recipients, body, html=None):
     """
-    Send email using Resend API (HTTP-based, works on Render free tier).
-    Requires RESEND_API_KEY env var.
+    Send email using Resend API (HTTP-based).
+    Note: Free tier only allows sending to your own email without domain verification.
     """
     api_key = os.getenv('RESEND_API_KEY')
     from_email = os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')
@@ -41,7 +97,6 @@ def send_email_resend(subject, recipients, body, html=None):
     
     print(f"[MAIL-RESEND] Sending to {recipients} from {from_email}", flush=True)
     
-    # Prepare recipients list
     to_list = recipients if isinstance(recipients, list) else [recipients]
     
     payload = {
@@ -78,16 +133,30 @@ def send_email_resend(subject, recipients, body, html=None):
 
 def send_email(subject, recipients, body, html=None, cc=None, attachments=None):
     """
-    Send email - uses Resend API (HTTP) since Render blocks SMTP.
-    Falls back to Flask-Mail for local dev or attachments.
+    Send email - tries multiple providers in order:
+    1. Brevo API (300 free emails/day, no domain verification)
+    2. Resend API (requires domain verification for non-self emails)
+    3. Flask-Mail SMTP (for local dev or attachments)
     """
     print(f"[MAIL] send_email called: to={recipients}, subject={subject}", flush=True)
     
-    # Try Resend API first (works on Render)
-    if os.getenv('RESEND_API_KEY') and not attachments:
-        return send_email_resend(subject, recipients, body, html)
+    # For simple emails without attachments, try HTTP-based APIs
+    if not attachments:
+        # Try Brevo first (most permissive free tier)
+        if os.getenv('BREVO_API_KEY'):
+            result = send_email_brevo(subject, recipients, body, html)
+            if result:
+                return True
+            print("[MAIL] Brevo failed, trying next provider...", flush=True)
+        
+        # Try Resend as backup
+        if os.getenv('RESEND_API_KEY'):
+            result = send_email_resend(subject, recipients, body, html)
+            if result:
+                return True
+            print("[MAIL] Resend failed, trying Flask-Mail...", flush=True)
     
-    # Fall back to Flask-Mail (for local dev or attachments)
+    # Fall back to Flask-Mail (for local dev, attachments, or if APIs fail)
     print("[MAIL] Using Flask-Mail fallback", flush=True)
     try:
         flask_app = current_app._get_current_object()
@@ -110,7 +179,7 @@ def send_email(subject, recipients, body, html=None, cc=None, attachments=None):
             print(f"[MAIL] Email sent successfully -> {recipients}", flush=True)
             return True
     except Exception as e:
-        print(f"[MAIL] Failed to send email to {recipients}: {e}", flush=True)
+        print(f"[MAIL] Flask-Mail failed: {e}", flush=True)
         traceback.print_exc()
         return False
     
