@@ -89,7 +89,15 @@ function updateParticipantStatus(call_id, employee_id, email, status) {
 
 function broadcastParticipantUpdate(call) {
   if (!call || !call.admin_id) return;
-  io.to(call.admin_id).emit('call:participant-update', {
+  
+  // Normalize admin_id to uppercase for consistent room matching
+  const adminRoom = String(call.admin_id).trim().toUpperCase();
+  const roomSockets = io.sockets.adapter.rooms.get(adminRoom);
+  const socketsInRoom = roomSockets ? roomSockets.size : 0;
+  
+  console.log('[SOCKET-SERVER] broadcastParticipantUpdate to admin room:', adminRoom, 'socketsInRoom:', socketsInRoom, 'participants:', call.participants.map(p => ({ id: p.employee_id, status: p.status })));
+  
+  io.to(adminRoom).emit('call:participant-update', {
     call_id: call.call_id,
     participants: call.participants
   });
@@ -180,9 +188,16 @@ io.on('connection', (socket) => {
   socket.on('call:accepted', (payload) => {
     try {
       const { call_id, employee_id, email } = payload || {};
-      if (!call_id) return;
+      console.log('[SOCKET-SERVER] call:accepted received:', { call_id, employee_id, email });
+      if (!call_id) {
+        console.warn('[SOCKET-SERVER] call:accepted missing call_id');
+        return;
+      }
       const call = updateParticipantStatus(call_id, employee_id, email, 'accepted');
-      if (!call) return;
+      if (!call) {
+        console.warn('[SOCKET-SERVER] call:accepted - call not found for call_id:', call_id);
+        return;
+      }
       broadcastParticipantUpdate(call);
     } catch (e) {
       console.error('[SOCKET-SERVER] call:accepted error:', e);
@@ -192,9 +207,16 @@ io.on('connection', (socket) => {
   socket.on('call:declined', (payload) => {
     try {
       const { call_id, employee_id, email } = payload || {};
-      if (!call_id) return;
+      console.log('[SOCKET-SERVER] call:declined received:', { call_id, employee_id, email });
+      if (!call_id) {
+        console.warn('[SOCKET-SERVER] call:declined missing call_id');
+        return;
+      }
       const call = updateParticipantStatus(call_id, employee_id, email, 'declined');
-      if (!call) return;
+      if (!call) {
+        console.warn('[SOCKET-SERVER] call:declined - call not found for call_id:', call_id);
+        return;
+      }
       broadcastParticipantUpdate(call);
     } catch (e) {
       console.error('[SOCKET-SERVER] call:declined error:', e);
