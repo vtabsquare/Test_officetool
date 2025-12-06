@@ -273,19 +273,19 @@ const setupRealtimeCallClient = () => {
     socket.on('call:ring', (payload) => {
       console.log('[MEET-RT] call:ring received in room', roomId, 'payload=', payload);
 
-      // Do not show the incoming-call popup on the Meet admin page itself.
-      // This allows you to have one tab acting as "admin / caller" on #/meet
-      // and another tab acting as the employee view showing the popup.
+      // Do not show the incoming-call popup if this user is the one who initiated the call
+      // (i.e., they are on the Meet page AND they are the admin_id of this call)
       try {
         const hash = window.location.hash || '#/';
-        if (hash.startsWith('#/meet')) {
+        const callAdminId = String(payload?.admin_id || '').trim().toUpperCase();
+        const currentUserId = roomId.toUpperCase();
+        
+        // Skip if user is on Meet page AND is the caller (admin who initiated)
+        if (hash.startsWith('#/meet') && callAdminId === currentUserId) {
+          console.log('[MEET-RT] Skipping call:ring - user is the caller on Meet page');
           return;
         }
       } catch {}
-
-      if (isAdmin) {
-        return;
-      }
       incomingPayload = payload;
       ensureOverlay();
       if (titleEl) {
