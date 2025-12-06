@@ -117,13 +117,21 @@ app.post('/emit', (req, res) => {
       participants: call.participants,
     });
     call.participants.forEach((p) => {
-      const room = p.employee_id || p.email;
-      if (!room) return;
-      console.log('[SOCKET-SERVER] emitting call:ring to room', room, 'for participant', {
+      // Normalize room to uppercase for consistent matching with registered users
+      const rawRoom = p.employee_id || p.email;
+      if (!rawRoom) return;
+      const room = String(rawRoom).trim().toUpperCase();
+      
+      // Check if anyone is in this room
+      const roomSockets = io.sockets.adapter.rooms.get(room);
+      const socketsInRoom = roomSockets ? roomSockets.size : 0;
+      
+      console.log('[SOCKET-SERVER] emitting call:ring to room', room, 'socketsInRoom:', socketsInRoom, 'for participant', {
         employee_id: p.employee_id,
         email: p.email,
         status: p.status,
       });
+      
       io.to(room).emit('call:ring', {
         call_id: call.call_id,
         admin_id: call.admin_id,
@@ -148,17 +156,22 @@ app.post('/emit', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('[SOCKET-SERVER] client connected:', socket.id);
+  console.log('[SOCKET-SERVER] client connected:', socket.id, 'from:', socket.handshake.headers.origin || 'unknown');
 
   socket.on('register', (payload) => {
     try {
       const { user_id, role } = payload || {};
-      if (!user_id) return;
-      socket.data.user_id = user_id;
+      if (!user_id) {
+        console.warn('[SOCKET-SERVER] register called without user_id');
+        return;
+      }
+      // Normalize user_id to uppercase for consistent room matching
+      const normalizedUserId = String(user_id).trim().toUpperCase();
+      socket.data.user_id = normalizedUserId;
       socket.data.role = role || 'employee';
-      socket.join(user_id);
-      addSocketToUser(user_id, socket.id);
-      console.log('[SOCKET-SERVER] register:', user_id, socket.data.role);
+      socket.join(normalizedUserId);
+      addSocketToUser(normalizedUserId, socket.id);
+      console.log('[SOCKET-SERVER] register:', normalizedUserId, 'role:', socket.data.role, 'rooms:', Array.from(socket.rooms));
     } catch (e) {
       console.error('[SOCKET-SERVER] register error:', e);
     }
