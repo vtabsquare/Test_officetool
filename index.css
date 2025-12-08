@@ -1459,6 +1459,7 @@ body.dark-theme #app-container.sidebar-hidden .nav-link.active i {
   display: flex;
   gap: 1.25rem;
   flex-wrap: wrap;
+  margin-top: 1.25rem;
 }
 
 .hero-announcement {
