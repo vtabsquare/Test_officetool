@@ -3611,19 +3611,19 @@ async function openTaskDetailsPage(projectId, taskId) {
 
       <div class="form-grid-2col" id="task-detail-form">
 
-        <div class="form-group full-col"><label>Task Title</label>
+        <div class="task-detail-group full-col"><label>Task Title</label>
           <input id="td-title" value="${escapeHtml(
     t.task_name || ""
   )}" readonly class="readonly-input">
         </div>
 
-        <div class="form-group full-col"><label>Description</label>
+        <div class="task-detail-group full-col"><label>Description</label>
           <textarea id="td-desc" readonly class="readonly-input">${escapeHtml(
     t.task_description || ""
   )}</textarea>
         </div>
 
-        <div class="form-group">
+        <div class="task-detail-group">
           <label>Assigned To</label>
 
           <div class="multi-select" id="assignedToEdit">
@@ -3635,7 +3635,7 @@ async function openTaskDetailsPage(projectId, taskId) {
         </div>
 
 
-        <div class="form-group">
+        <div class="task-detail-group">
           <label>Status</label>
           <select id="td-status" class="readonly-input" disabled>
             ${window.GLOBAL_CRM_COLS.map(
@@ -3650,13 +3650,13 @@ async function openTaskDetailsPage(projectId, taskId) {
 
         
 
-        <div class="form-group"><label>Priority</label>
+        <div class="task-detail-group"><label>Priority</label>
           <input id="td-priority" value="${escapeHtml(
     t.task_priority || ""
   )}" readonly class="readonly-input">
         </div>
 
-        <div class="form-group"><label>Due Date</label>
+        <div class="task-detail-group"><label>Due Date</label>
           <input type="date" id="td-due" value="${t.due_date || ""
     }" readonly class="readonly-input">
         </div>

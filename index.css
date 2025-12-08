@@ -8387,6 +8387,34 @@ body.dark-theme .onboarding-main-stepper .stepper-item.completed .stepper-label-
   /* make Task Title and Description span both columns */
 }
 
+/* Task details page – use dedicated group class so labels are stacked, not floating */
+#task-detail-form .task-detail-group {
+  display: flex;
+  flex-direction: column;
+  position: static;
+  padding-left: 0;
+  min-height: auto;
+  justify-content: flex-start;
+}
+
+#task-detail-form .task-detail-group.full-col {
+  grid-column: 1 / -1;
+}
+
+#task-detail-form .task-detail-group label {
+  position: static;
+  top: auto;
+  left: auto;
+  background: transparent;
+  padding: 0 0 4px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  pointer-events: auto;
+  transform: none;
+  margin: 0 0 6px 0;
+  z-index: auto;
+}
 
 /* for task card */
 .assignee-circle {
