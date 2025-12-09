@@ -827,6 +827,21 @@ body.dark-theme #app-container.sidebar-hidden .nav-link.active i {
   padding: 0.55rem 1rem 0.55rem 2.45rem;
 }
 
+.header-greeting {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  will-change: transform;
+}
+
+.header-greeting.header-visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.header-greeting.header-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -957,6 +972,7 @@ body.dark-theme #app-container.sidebar-hidden .nav-link.active i {
   padding: 1.3rem 1.75rem;
   box-shadow: var(--shadow-sm);
   color: var(--text-primary);
+  margin-top: 0.9rem;
 }
 
 /* Modern Page Header Styles */

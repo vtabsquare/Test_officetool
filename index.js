@@ -722,6 +722,7 @@ const init = async () => {
   let lastScrollTop = 0;
   const pageShell = document.querySelector('.page-shell');
   const headerActions = document.querySelector('.header-actions');
+  const headerGreeting = document.querySelector('.header-greeting');
   const appContainer = document.getElementById('app-container');
   const sidebarEl = document.getElementById('sidebar');
   let sidebarHidden = false;
@@ -739,7 +740,8 @@ const init = async () => {
     }
   };
 
-  if (pageShell && headerActions) {
+  if (pageShell && (headerActions || headerGreeting)) {
+
     // On desktop, start with the sidebar hidden and reveal only via left-edge hover.
     // On smaller screens, keep the sidebar visible.
     if (isDesktopViewport()) {
@@ -751,16 +753,28 @@ const init = async () => {
     pageShell.addEventListener('scroll', () => {
       const scrollTop = pageShell.scrollTop;
 
-      // Hide header actions on scroll down
+      // Hide header greeting and actions on scroll down
       if (scrollTop > lastScrollTop) {
-        headerActions.classList.remove('header-visible');
-        headerActions.classList.add('header-hidden');
+        if (headerActions) {
+          headerActions.classList.remove('header-visible');
+          headerActions.classList.add('header-hidden');
+        }
+        if (headerGreeting) {
+          headerGreeting.classList.remove('header-visible');
+          headerGreeting.classList.add('header-hidden');
+        }
       }
 
-      // Show header actions again when user scrolls back to top
+      // Show header greeting and actions again when user scrolls back to top
       if (scrollTop === 0) {
-        headerActions.classList.remove('header-hidden');
-        headerActions.classList.add('header-visible');
+        if (headerActions) {
+          headerActions.classList.remove('header-hidden');
+          headerActions.classList.add('header-visible');
+        }
+        if (headerGreeting) {
+          headerGreeting.classList.remove('header-hidden');
+          headerGreeting.classList.add('header-visible');
+        }
       }
 
       lastScrollTop = scrollTop;
