@@ -2219,28 +2219,41 @@ export const renderMeetPage = async () => {
         body.dark-theme .meet-employee-card p { color: #e2e8f0; }
 
         /* --- Call Modal --- */
+        /* Keep the participant panel anchored near the call area without full-page blur */
         .meet-call-modal {
             position: fixed;
-            inset: 0;
+            inset: auto 20px 24px auto;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            align-items: flex-end;
+            justify-content: flex-end;
             z-index: 9999;
-            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.86), rgba(15, 23, 42, 0.78));
-            backdrop-filter: blur(20px) saturate(140%);
-            -webkit-backdrop-filter: blur(20px) saturate(140%);
+            pointer-events: none;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
         }
         .meet-call-modal.hidden { display: none; }
         .meet-call-modal-card {
-            width: min(540px, 92%);
+            width: min(420px, 92vw);
             background: linear-gradient(160deg, #0f172a, #111827);
-            border-radius: 20px;
-            padding: 22px 22px 16px;
-            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
-            max-height: 80vh;
+            border-radius: 16px;
+            padding: 18px 18px 14px;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+            max-height: 72vh;
             overflow-y: auto;
-            border: 1px solid rgba(148, 163, 184, 0.55);
+            border: 1px solid rgba(148, 163, 184, 0.4);
             color: #e5e7eb;
+            pointer-events: auto;
+        }
+        @media (max-width: 768px) {
+            .meet-call-modal {
+                inset: auto 12px 16px 12px;
+                justify-content: center;
+            }
+            .meet-call-modal-card {
+                width: min(480px, 96vw);
+                max-height: 68vh;
+            }
         }
         .meet-call-banner {
             display: flex;
