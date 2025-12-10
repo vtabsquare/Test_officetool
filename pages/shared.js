@@ -2222,24 +2222,26 @@ export const renderMeetPage = async () => {
         /* Keep the participant panel anchored near the call area without full-page blur */
         .meet-call-modal {
             position: fixed;
-            inset: auto 20px 24px auto;
+            top: 96px;
+            right: 24px;
+            left: auto;
+            bottom: auto;
             display: flex;
-            align-items: flex-end;
+            align-items: flex-start;
             justify-content: flex-end;
             z-index: 9999;
-            pointer-events: none;
             background: transparent;
             backdrop-filter: none;
             -webkit-backdrop-filter: none;
         }
         .meet-call-modal.hidden { display: none; }
         .meet-call-modal-card {
-            width: min(420px, 92vw);
+            width: min(380px, 92vw);
             background: linear-gradient(160deg, #0f172a, #111827);
             border-radius: 16px;
             padding: 18px 18px 14px;
             box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-            max-height: 72vh;
+            max-height: 68vh;
             overflow-y: auto;
             border: 1px solid rgba(148, 163, 184, 0.4);
             color: #e5e7eb;
@@ -2247,12 +2249,15 @@ export const renderMeetPage = async () => {
         }
         @media (max-width: 768px) {
             .meet-call-modal {
-                inset: auto 12px 16px 12px;
+                top: auto;
+                right: 12px;
+                left: 12px;
+                bottom: 16px;
                 justify-content: center;
             }
             .meet-call-modal-card {
-                width: min(480px, 96vw);
-                max-height: 68vh;
+                width: min(420px, 96vw);
+                max-height: 64vh;
             }
         }
         .meet-call-banner {
@@ -2431,7 +2436,7 @@ export const renderMeetPage = async () => {
                     <h3 style="margin:0; font-size:18px;">Call participants</h3>
                     <p style="margin:4px 0 0; font-size:13px; color:#6b7280;">Gather confirmations before joining the meeting.</p>
                 </div>
-                <button id="meet-call-close" class="btn btn-link" style="font-size:18px; padding:4px 8px;">
+                <button type="button" id="meet-call-close" class="btn btn-link" style="font-size:18px; padding:4px 8px;" aria-label="Close call participants">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
