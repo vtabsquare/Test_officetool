@@ -359,25 +359,27 @@ active_sessions = {}
 login_events = []
 
 def reverse_geocode_to_city(lat, lng):
-    """Convert lat/lng to city name using OpenStreetMap Nominatim API."""
+    """Convert lat/lng to city/locality using OpenStreetMap Nominatim API."""
     if not lat or not lng:
         return None
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json&zoom=10"
+        # zoom 13 gives city/locality level, addressdetails=1 for richer fields
+        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json&zoom=13&addressdetails=1"
         headers = {"User-Agent": "OfficeToolApp/1.0"}
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, headers=headers, timeout=7)
         if resp.status_code == 200:
             data = resp.json()
             address = data.get("address", {})
-            # Try to get city name from various fields
+            # Try multiple locality-level fields for best accuracy
             city = (
-                address.get("city") or 
-                address.get("town") or 
-                address.get("village") or 
-                address.get("municipality") or
-                address.get("county") or
-                address.get("state_district") or
-                address.get("state")
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+                or address.get("suburb")
+                or address.get("county")
+                or address.get("state_district")
+                or address.get("state")
             )
             if city:
                 print(f"[GEOCODE] {lat},{lng} -> {city}")
@@ -415,7 +417,8 @@ def log_login_event(employee_id, event_type, req, location=None, client_time=Non
         event["location_lat"] = location.get("lat")
         event["location_lng"] = location.get("lng")
         event["accuracy_m"] = location.get("accuracy_m")
-        event["location_source"] = "browser" if location.get("lat") else "none"
+        # Respect explicit source if provided, else assume browser when coords exist
+        event["location_source"] = location.get("source") or ("browser" if location.get("lat") else "none")
     login_events.append(event)
     print(f"[LOGIN-EVENT] {event_type} for {employee_id} at {now.isoformat()}, city={city_name}")
     return event
