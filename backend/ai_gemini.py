@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv("id.env")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBDRCwkPEzlxYOxg64IzamKqerZDPFSwf0")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDYV_ro7xc00v0rsdM1Lykxug2mtwb6QM0")
 GEMINI_MODEL = "gemini-2.0-flash"  # Fast model for quick responses
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 

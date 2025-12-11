@@ -2258,6 +2258,11 @@ export const renderMeetPage = async () => {
         #meet-call-close:hover {
             background: rgba(255, 255, 255, 0.1);
         }
+        .meet-call-footer {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+        }
         @media (max-width: 768px) {
             .meet-call-modal-card {
                 width: min(420px, 94vw);
@@ -2454,6 +2459,11 @@ export const renderMeetPage = async () => {
                 </div>
             </div>
             <div id="meet-call-list"></div>
+            <div class="meet-call-footer">
+                <button type="button" id="meet-call-cancel" class="btn btn-outline-light btn-sm">
+                    <i class="fa-solid fa-phone-slash"></i> Cancel call
+                </button>
+            </div>
         </div>
     </div>
     `;
@@ -2486,6 +2496,7 @@ export const renderMeetPage = async () => {
         const callModal = document.getElementById('meet-call-modal');
         const callList = document.getElementById('meet-call-list');
         const callCloseBtn = document.getElementById('meet-call-close');
+        const callCancelBtn = document.getElementById('meet-call-cancel');
         const callBanner = document.getElementById('meet-call-banner');
         const callBannerTitle = document.getElementById('meet-call-banner-title');
         const callBannerText = document.getElementById('meet-call-banner-text');
@@ -3237,6 +3248,13 @@ export const renderMeetPage = async () => {
         }
         if (callCloseBtn) {
             callCloseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                closeCallModal();
+            });
+        }
+        if (callCancelBtn) {
+            callCancelBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 closeCallModal();
