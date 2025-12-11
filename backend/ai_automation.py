@@ -367,22 +367,13 @@ def execute_automation_action(action: Dict[str, Any], token: str) -> Dict[str, A
                 create_record, BASE_URL, LEAVE_BALANCE_ENTITY,
                 calculate_experience, get_leave_allocation_by_experience,
                 get_login_table, _hash_password, determine_access_level,
-                generate_user_id
+                generate_user_id, send_login_credentials_email,
             )
             import os
             
             entity_set = get_employee_entity_set(token)
             field_map = get_field_map(entity_set)
-            
-            # Generate employee ID
-            employee_id = generate_employee_id()
-            
-            # Build payload
-            payload = {}
-            
-            if field_map['id']:
-                payload[field_map['id']] = employee_id
-            
+
             first_name = data.get('first_name', '')
             last_name = data.get('last_name', '')
             email = data.get('email', '')
@@ -390,7 +381,45 @@ def execute_automation_action(action: Dict[str, Any], token: str) -> Dict[str, A
             doj = data.get('doj', '')
             contact_number = data.get('contact_number', '')
             employee_flag = data.get('employee_flag', 'Employee')
+
+            # ==================== DUPLICATE CHECKS (same as /api/employees) ====================
+            headers_check = {"Authorization": f"Bearer {token}"}
+
+            if email:
+                safe_email = email.strip().replace("'", "''")
+                check_url = f"{BASE_URL}/{entity_set}?$filter=crc6f_email eq '{safe_email}'"
+                resp_email = requests.get(check_url, headers=headers_check)
+                if resp_email.status_code == 200:
+                    existing = resp_email.json().get('value', [])
+                    if existing:
+                        return {
+                            "success": False,
+                            "error": f"Employee with email {email} already exists",
+                        }
+
+            if contact_number:
+                safe_contact = contact_number.strip().replace("'", "''")
+                check_url = f"{BASE_URL}/{entity_set}?$filter=crc6f_contactnumber eq '{safe_contact}'"
+                resp_contact = requests.get(check_url, headers=headers_check)
+                if resp_contact.status_code == 200:
+                    existing = resp_contact.json().get('value', [])
+                    if existing:
+                        return {
+                            "success": False,
+                            "error": f"Employee with contact number {contact_number} already exists",
+                        }
+
+            # ==================== EMPLOYEE CREATION ====================
+
+            # Generate employee ID (always auto-generated in automation flow)
+            employee_id = generate_employee_id()
             
+            # Build payload
+            payload = {}
+            
+            if field_map['id']:
+                payload[field_map['id']] = employee_id
+
             # Handle name fields
             if field_map['fullname']:
                 payload[field_map['fullname']] = f"{first_name} {last_name}".strip()
@@ -424,7 +453,7 @@ def execute_automation_action(action: Dict[str, Any], token: str) -> Dict[str, A
             # Create the employee record
             created = create_record(entity_set, payload)
             
-            # Create login record
+            # ==================== LOGIN CREATION + EMAIL ====================
             if email:
                 try:
                     login_table = get_login_table(token)
@@ -442,10 +471,27 @@ def execute_automation_action(action: Dict[str, Any], token: str) -> Dict[str, A
                         "crc6f_loginattempts": "0"
                     }
                     create_record(login_table, login_payload)
+
+                    # Send login credentials email (same as external upload path)
+                    try:
+                        credentials = {
+                            "username": email,
+                            "password": default_password,
+                        }
+                        employee_data = {
+                            "email": email,
+                            "firstname": first_name,
+                            "lastname": last_name,
+                            "employee_id": employee_id,
+                        }
+                        send_login_credentials_email(employee_data, credentials)
+                    except Exception as mail_err:
+                        print(f"[WARN] Failed to send login credentials email: {mail_err}")
+
                 except Exception as e:
                     print(f"[WARN] Failed to create login: {e}")
             
-            # Create leave balance
+            # ==================== LEAVE BALANCE CREATION ====================
             try:
                 experience = calculate_experience(doj) if doj else 0
                 cl, sl, total, allocation_type = get_leave_allocation_by_experience(experience)
