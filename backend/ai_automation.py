@@ -131,6 +131,15 @@ AUTOMATION_INTENTS = {
         "flow": "employee_edit",
         "description": "Edit/update an existing employee record"
     },
+    "delete_employee": {
+        "keywords": [
+            "delete employee", "remove employee", "delete an employee", "remove an employee",
+            "delete employee record", "remove employee record", "terminate employee",
+            "delete staff", "remove staff"
+        ],
+        "flow": "employee_delete",
+        "description": "Delete an existing employee record"
+    },
 }
 
 
@@ -491,6 +500,106 @@ def _build_updates_summary(updates: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ================== EMPLOYEE DELETE FLOW ==================
+
+def handle_employee_delete_flow(
+    user_message: str,
+    state: ConversationState
+) -> Tuple[str, ConversationState, Optional[Dict[str, Any]]]:
+    """
+    Handle the employee delete conversation flow.
+    
+    Flow:
+    1. Ask for employee ID or email to find the employee
+    2. Show employee details and ask for strong confirmation
+    3. Delete the employee
+    """
+    
+    # Starting the flow - ask for employee identifier
+    if state.active_flow != "employee_delete":
+        state.active_flow = "employee_delete"
+        state.current_step = 0
+        state.collected_data = {}
+        state.awaiting_confirmation = False
+        state.edit_target = None
+        
+        response = """⚠️ I'll help you delete an employee record. **This action cannot be undone.**
+
+Please provide the **Employee ID** or **Email** of the employee you want to delete.
+
+(Type **'cancel'** at any time to stop.)"""
+        return response, state, None
+    
+    # Check for cancel
+    if user_message.strip().lower() in ['cancel', 'stop', 'quit', 'exit', 'nevermind']:
+        state.reset()
+        return "No problem! Delete cancelled. Let me know if you need anything else. 👋", state, None
+    
+    # Handle confirmation FIRST (before other checks)
+    if state.awaiting_confirmation:
+        answer = user_message.strip()
+        expected_confirm = state.collected_data.get("confirm_text", "")
+        
+        if answer == expected_confirm:
+            # Execute the delete
+            action = {
+                "type": "delete_employee",
+                "employee_id": state.edit_target.get("employee_id"),
+                "record_guid": state.edit_target.get("record_guid"),
+            }
+            state.reset()
+            return "🗑️ Deleting employee record...", state, action
+        elif answer.lower() in ['no', 'n', 'cancel']:
+            state.reset()
+            return "Delete cancelled. The employee record was NOT deleted. 👋", state, None
+        else:
+            return f"To confirm deletion, please type exactly: **{expected_confirm}**\n\nOr type **'cancel'** to abort.", state, None
+    
+    # Step 0: Looking up the employee
+    if state.current_step == 0 and state.edit_target is None:
+        search_term = user_message.strip()
+        state.collected_data["search_term"] = search_term
+        state.current_step = 1
+        
+        # Return action to search for employee
+        action = {
+            "type": "search_employee_for_delete",
+            "search_term": search_term
+        }
+        return "🔍 Searching for employee...", state, action
+    
+    # Step 1: Employee found, show details and ask for confirmation
+    if state.current_step == 1 and state.edit_target:
+        # Show employee details and ask for strong confirmation
+        emp = state.edit_target
+        emp_id = emp.get("employee_id", "Unknown")
+        name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+        email = emp.get("email", "N/A")
+        designation = emp.get("designation", "N/A")
+        
+        # Set the confirmation text
+        confirm_text = f"DELETE {emp_id}"
+        state.collected_data["confirm_text"] = confirm_text
+        state.awaiting_confirmation = True
+        
+        response = f"""⚠️ **WARNING: You are about to delete this employee:**
+
+• **Employee ID:** {emp_id}
+• **Name:** {name}
+• **Email:** {email}
+• **Designation:** {designation}
+
+**This action is permanent and cannot be undone.**
+
+To confirm, type exactly: **{confirm_text}**
+
+Or type **'cancel'** to abort."""
+        return response, state, None
+    
+    # Fallback
+    return "I didn't understand that. Please try again or type **'cancel'** to exit.", state, None
+
+
 # ================== MAIN AUTOMATION HANDLER ==================
 
 def process_automation(
@@ -536,6 +645,14 @@ def process_automation(
                 "state": state.to_dict(),
                 "action": action
             }
+        elif state.active_flow == "employee_delete":
+            response, state, action = handle_employee_delete_flow(user_message, state)
+            return {
+                "is_automation": True,
+                "response": response,
+                "state": state.to_dict(),
+                "action": action
+            }
     
     # Check for new automation intent
     intent = detect_automation_intent(user_message)
@@ -550,6 +667,14 @@ def process_automation(
             }
         elif intent["flow"] == "employee_edit":
             response, state, action = handle_employee_edit_flow(user_message, state)
+            return {
+                "is_automation": True,
+                "response": response,
+                "state": state.to_dict(),
+                "action": action
+            }
+        elif intent["flow"] == "employee_delete":
+            response, state, action = handle_employee_delete_flow(user_message, state)
             return {
                 "is_automation": True,
                 "response": response,
@@ -925,6 +1050,127 @@ def execute_automation_action(action: Dict[str, Any], token: str) -> Dict[str, A
             return {
                 "success": False,
                 "error": f"Error updating employee: {str(e)}"
+            }
+    
+    # ==================== SEARCH EMPLOYEE FOR DELETE ====================
+    if action["type"] == "search_employee_for_delete":
+        # Reuse the same search logic as edit flow
+        try:
+            from unified_server import (
+                get_employee_entity_set, get_field_map, BASE_URL
+            )
+            
+            search_term = action.get("search_term", "").strip()
+            entity_set = get_employee_entity_set(token)
+            field_map = get_field_map(entity_set)
+            
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            employee = None
+            
+            # Search by employee ID
+            if search_term.upper().startswith("EMP") or search_term.isdigit():
+                id_field = field_map.get('id', 'crc6f_employeeid')
+                safe_term = search_term.strip().replace("'", "''")
+                url = f"{BASE_URL}/{entity_set}?$filter={id_field} eq '{safe_term}'"
+                resp = requests.get(url, headers=headers)
+                if resp.status_code == 200:
+                    results = resp.json().get('value', [])
+                    if results:
+                        employee = results[0]
+            
+            # Search by email if not found
+            if not employee and '@' in search_term:
+                email_field = field_map.get('email', 'crc6f_email')
+                safe_email = search_term.lower().strip().replace("'", "''")
+                url = f"{BASE_URL}/{entity_set}?$filter={email_field} eq '{safe_email}'"
+                resp = requests.get(url, headers=headers)
+                if resp.status_code == 200:
+                    results = resp.json().get('value', [])
+                    if results:
+                        employee = results[0]
+            
+            # Try contains search as fallback
+            if not employee:
+                id_field = field_map.get('id', 'crc6f_employeeid')
+                safe_term = search_term.strip().replace("'", "''")
+                url = f"{BASE_URL}/{entity_set}?$filter=contains({id_field}, '{safe_term}')"
+                resp = requests.get(url, headers=headers)
+                if resp.status_code == 200:
+                    results = resp.json().get('value', [])
+                    if results:
+                        employee = results[0]
+            
+            if not employee:
+                return {
+                    "success": False,
+                    "error": f"No employee found with ID or email: **{search_term}**. Please check and try again."
+                }
+            
+            # Extract employee data
+            if field_map.get('fullname'):
+                fullname = employee.get(field_map['fullname'], '')
+                parts = fullname.split(' ', 1)
+                first_name = parts[0] if parts else ''
+                last_name = parts[1] if len(parts) > 1 else ''
+            else:
+                first_name = employee.get(field_map.get('firstname', ''), '')
+                last_name = employee.get(field_map.get('lastname', ''), '')
+            
+            employee_data = {
+                "employee_id": employee.get(field_map.get('id')),
+                "record_guid": employee.get(field_map.get('primary')),
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": employee.get(field_map.get('email', ''), ''),
+                "designation": employee.get(field_map.get('designation', ''), ''),
+            }
+            
+            return {
+                "success": True,
+                "employee": employee_data,
+                "message": f"Found employee: {first_name} {last_name}",
+                "for_delete": True
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error searching for employee: {str(e)}"
+            }
+    
+    # ==================== DELETE EMPLOYEE ====================
+    if action["type"] == "delete_employee":
+        try:
+            from unified_server import (
+                get_employee_entity_set, get_field_map, BASE_URL, _extract_record_id
+            )
+            from dataverse_helper import delete_record
+            
+            employee_id = action.get("employee_id")
+            record_guid = action.get("record_guid")
+            
+            if not record_guid:
+                return {
+                    "success": False,
+                    "error": "Missing record GUID for deletion"
+                }
+            
+            entity_set = get_employee_entity_set(token)
+            
+            # Perform the DELETE request
+            delete_record(entity_set, record_guid)
+            
+            return {
+                "success": True,
+                "message": f"Employee **{employee_id}** has been permanently deleted.",
+                "employee_id": employee_id
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error deleting employee: {str(e)}"
             }
     
     return {

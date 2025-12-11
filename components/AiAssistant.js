@@ -8,11 +8,11 @@ let isLoading = false;
 let automationState = null; // State for multi-step automation flows
 
 const AI_SUGGESTIONS = [
-    "How many employees are active?",
     "Create an employee record",
     "Edit employee record",
+    "Delete employee record",
+    "How many employees are active?",
     "Show my attendance summary",
-    "List upcoming holidays",
 ];
 
 export function createAiAssistant() {

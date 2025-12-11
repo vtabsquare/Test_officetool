@@ -10432,6 +10432,38 @@ def ai_query():
                         from ai_automation import _build_edit_menu
                         menu = _build_edit_menu(action_result.get("employee"))
                         response_data["answer"] = f"✅ {action_result.get('message')}\n\n{menu}"
+                    # Special handling for search_employee_for_delete - update state and show delete confirmation
+                    elif action.get("type") == "search_employee_for_delete" and action_result.get("employee"):
+                        current_state = response_data.get("automationState", {})
+                        current_state["edit_target"] = action_result.get("employee")
+                        response_data["automationState"] = current_state
+                        
+                        # Build the delete confirmation response
+                        emp = action_result.get("employee")
+                        emp_id = emp.get("employee_id", "Unknown")
+                        name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                        email = emp.get("email", "N/A")
+                        designation = emp.get("designation", "N/A")
+                        confirm_text = f"DELETE {emp_id}"
+                        
+                        # Update state for confirmation
+                        current_state["collected_data"] = current_state.get("collected_data", {})
+                        current_state["collected_data"]["confirm_text"] = confirm_text
+                        current_state["awaiting_confirmation"] = True
+                        response_data["automationState"] = current_state
+                        
+                        response_data["answer"] = f"""⚠️ **WARNING: You are about to delete this employee:**
+
+• **Employee ID:** {emp_id}
+• **Name:** {name}
+• **Email:** {email}
+• **Designation:** {designation}
+
+**This action is permanent and cannot be undone.**
+
+To confirm, type exactly: **{confirm_text}**
+
+Or type **'cancel'** to abort."""
                     else:
                         # Normal success - append message
                         response_data["answer"] += f"\n\n🎉 {action_result.get('message')}"
