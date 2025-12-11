@@ -51,23 +51,34 @@ const formatTime = (isoString) => {
 
 const formatLocation = (loc) => {
     if (!loc) return '<span class="text-muted">Not shared</span>';
-    // If backend sent city string directly
+
+    // If backend sent city string directly (legacy)
     if (typeof loc === 'string') {
         return loc ? `📍 ${loc}` : '<span class="text-muted">Not shared</span>';
     }
+
     // If backend sent detailed object
     const city = loc.city;
     const lat = loc.lat;
     const lng = loc.lng;
+    const accuracy = typeof loc.accuracy_m === 'number' ? loc.accuracy_m : null;
+
+    // If accuracy is extremely low (radius > 100km), do not pretend we know exact city
+    if (accuracy && accuracy > 100000) {
+        return '<span class="text-muted">~ Approximate location (not precise)</span>';
+    }
+
     if (city) {
         return `📍 ${city}`;
     }
+
     if (lat && lng) {
         const latStr = Number(lat).toFixed(4);
         const lngStr = Number(lng).toFixed(4);
-        const accuracy = loc.accuracy_m ? ` (±${Math.round(loc.accuracy_m)}m)` : '';
-        return `🌐 ${latStr}, ${lngStr}${accuracy}`;
+        const accText = accuracy ? ` (±${Math.round(accuracy)}m)` : '';
+        return `🌐 ${latStr}, ${lngStr}${accText}`;
     }
+
     return '<span class="text-muted">Not shared</span>';
 };
 
