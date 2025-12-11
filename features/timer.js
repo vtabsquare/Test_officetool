@@ -20,6 +20,7 @@ const getGeolocation = () => {
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
                     accuracy_m: pos.coords.accuracy,
+                    source: 'browser',
                 };
                 console.log('[TIMER] Geolocation captured:', location);
                 resolve(location);

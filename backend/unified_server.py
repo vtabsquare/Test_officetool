@@ -363,8 +363,11 @@ def reverse_geocode_to_city(lat, lng):
     if not lat or not lng:
         return None
     try:
-        # zoom 13 gives city/locality level, addressdetails=1 for richer fields
-        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json&zoom=13&addressdetails=1"
+        # zoom 16 for tighter locality; addressdetails=1 for richer fields
+        url = (
+            "https://nominatim.openstreetmap.org/reverse"
+            f"?lat={lat}&lon={lng}&format=json&zoom=16&addressdetails=1&accept-language=en-IN"
+        )
         headers = {"User-Agent": "OfficeToolApp/1.0"}
         resp = requests.get(url, headers=headers, timeout=7)
         if resp.status_code == 200:
@@ -377,6 +380,9 @@ def reverse_geocode_to_city(lat, lng):
                 or address.get("village")
                 or address.get("municipality")
                 or address.get("suburb")
+                or address.get("neighbourhood")
+                or address.get("locality")
+                or address.get("hamlet")
                 or address.get("county")
                 or address.get("state_district")
                 or address.get("state")
@@ -10678,14 +10684,26 @@ def get_login_events():
                 # Use the earliest check-in
                 if not summary["check_in_time"] or event.get("server_time_utc", "") < summary["check_in_time"]:
                     summary["check_in_time"] = event.get("server_time_utc")
-                    # Store city name directly
-                    summary["check_in_location"] = event.get("city")
+                    # Store full location details (city + coords) for transparency
+                    summary["check_in_location"] = {
+                        "city": event.get("city"),
+                        "lat": event.get("location_lat"),
+                        "lng": event.get("location_lng"),
+                        "accuracy_m": event.get("accuracy_m"),
+                        "source": event.get("location_source"),
+                    }
             elif event.get("event_type") == "check_out":
                 # Use the latest check-out
                 if not summary["check_out_time"] or event.get("server_time_utc", "") > summary["check_out_time"]:
                     summary["check_out_time"] = event.get("server_time_utc")
-                    # Store city name directly
-                    summary["check_out_location"] = event.get("city")
+                    # Store full location details (city + coords) for transparency
+                    summary["check_out_location"] = {
+                        "city": event.get("city"),
+                        "lat": event.get("location_lat"),
+                        "lng": event.get("location_lng"),
+                        "accuracy_m": event.get("accuracy_m"),
+                        "source": event.get("location_source"),
+                    }
         
         return jsonify({
             "success": True,

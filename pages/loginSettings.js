@@ -49,9 +49,26 @@ const formatTime = (isoString) => {
     }
 };
 
-const formatLocation = (city) => {
-    if (!city) return '<span class="text-muted">Not shared</span>';
-    return `📍 ${city}`;
+const formatLocation = (loc) => {
+    if (!loc) return '<span class="text-muted">Not shared</span>';
+    // If backend sent city string directly
+    if (typeof loc === 'string') {
+        return loc ? `📍 ${loc}` : '<span class="text-muted">Not shared</span>';
+    }
+    // If backend sent detailed object
+    const city = loc.city;
+    const lat = loc.lat;
+    const lng = loc.lng;
+    if (city) {
+        return `📍 ${city}`;
+    }
+    if (lat && lng) {
+        const latStr = Number(lat).toFixed(4);
+        const lngStr = Number(lng).toFixed(4);
+        const accuracy = loc.accuracy_m ? ` (±${Math.round(loc.accuracy_m)}m)` : '';
+        return `🌐 ${latStr}, ${lngStr}${accuracy}`;
+    }
+    return '<span class="text-muted">Not shared</span>';
 };
 
 const buildLoginActivityHTML = (dailySummary = []) => {
