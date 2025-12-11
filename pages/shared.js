@@ -2497,6 +2497,14 @@ export const renderMeetPage = async () => {
         const projectIdInput = document.getElementById('meet-project-id');
         const timezoneInput = document.getElementById('meet-timezone');
 
+        try {
+            const body = document.body;
+            if (callModal && body && callModal.parentElement !== body) {
+                body.appendChild(callModal);
+            }
+        } catch (_) {
+        }
+
         const participantDirectory = new Map();
         const selectedProjects = new Map();
         let projectsCache = [];
@@ -2894,6 +2902,10 @@ export const renderMeetPage = async () => {
 
         const openCallModal = () => {
             if (!callModal) return;
+            try {
+                window.scrollTo(0, 0);
+            } catch (_) {
+            }
             callModal.classList.remove('hidden');
             callDecisions = new Map();
             renderCallList();
