@@ -10358,17 +10358,20 @@ def update_comp_off(employee_id):
 # ================== AI ASSISTANT ==================
 from ai_hf import ask_hf
 from ai_dataverse_service import build_ai_context
+from ai_automation import process_automation, execute_automation_action
 
 @app.route("/api/ai/query", methods=["POST"])
 def ai_query():
     """
-    AI Assistant endpoint - answers questions using Gemini + Dataverse data.
+    AI Assistant endpoint - answers questions using HF + Dataverse data.
+    Also handles automation flows (e.g., create employee via chat).
     
     Request body:
         - question: str (required)
         - scope: str (optional) - 'general', 'attendance', 'leave', 'employee', etc.
         - history: list (optional) - previous chat messages
         - currentUser: dict (optional) - user info
+        - automationState: dict (optional) - state for multi-step automation flows
     """
     try:
         data = request.get_json(force=True)
@@ -10390,6 +10393,37 @@ def ai_query():
             "is_admin": current_user.get("is_admin", False),
         }
         
+        # Get automation state from request (for multi-step flows)
+        automation_state = data.get("automationState", None)
+        
+        # Check for automation flow first
+        automation_result = process_automation(question, automation_state)
+        
+        if automation_result.get("is_automation"):
+            response_data = {
+                "success": True,
+                "answer": automation_result.get("response"),
+                "automationState": automation_result.get("state"),
+                "isAutomation": True
+            }
+            
+            # If there's an action to execute (e.g., create employee)
+            action = automation_result.get("action")
+            if action:
+                token = get_access_token()
+                action_result = execute_automation_action(action, token)
+                
+                if action_result.get("success"):
+                    # Append success message to response
+                    response_data["answer"] += f"\n\n🎉 {action_result.get('message')}"
+                    response_data["actionResult"] = action_result
+                else:
+                    response_data["answer"] += f"\n\n❌ Error: {action_result.get('error')}"
+                    response_data["actionError"] = action_result.get("error")
+            
+            return jsonify(response_data)
+        
+        # Not an automation - proceed with normal AI query
         # Determine scope from question keywords
         scope = data.get("scope", "general")
         question_lower = question.lower()
@@ -10414,7 +10448,7 @@ def ai_query():
         # Get chat history
         history = data.get("history", [])
         
-        # Call Gemini
+        # Call HF model
         result = ask_hf(
             question=question,
             data_context=data_context,
@@ -10427,7 +10461,8 @@ def ai_query():
                 "success": True,
                 "answer": result.get("answer"),
                 "scope": scope,
-                "timestamp": data_context.get("timestamp")
+                "timestamp": data_context.get("timestamp"),
+                "automationState": automation_result.get("state")  # Preserve state
             })
         else:
             return jsonify({

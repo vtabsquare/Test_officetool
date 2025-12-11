@@ -5,13 +5,14 @@ import { state } from '../state.js';
 let isOpen = false;
 let messages = [];
 let isLoading = false;
+let automationState = null; // State for multi-step automation flows
 
 const AI_SUGGESTIONS = [
     "How many employees are active?",
     "Show my attendance summary",
     "What are the pending leave requests?",
+    "Create an employee record",
     "List upcoming holidays",
-    "Show team attendance stats",
 ];
 
 export function createAiAssistant() {
@@ -190,7 +191,8 @@ async function sendMessage(question) {
             body: JSON.stringify({
                 question,
                 currentUser: state.user || {},
-                history: messages.slice(-10)
+                history: messages.slice(-10),
+                automationState: automationState // Pass automation state for multi-step flows
             })
         });
         
@@ -202,6 +204,16 @@ async function sendMessage(question) {
         if (data.success && data.answer) {
             messages.push({ role: 'assistant', text: data.answer });
             appendMessage('assistant', data.answer);
+            
+            // Update automation state for multi-step flows
+            if (data.automationState) {
+                automationState = data.automationState;
+            }
+            
+            // If an action was executed (e.g., employee created), show success indicator
+            if (data.actionResult) {
+                showActionSuccess(data.actionResult);
+            }
         } else {
             appendMessage('assistant', data.error || 'Sorry, I encountered an error. Please try again.');
         }
@@ -211,6 +223,20 @@ async function sendMessage(question) {
         console.error('AI Error:', error);
     } finally {
         isLoading = false;
+    }
+}
+
+function showActionSuccess(actionResult) {
+    // Show a brief toast/notification for successful actions
+    if (actionResult.employee_id) {
+        console.log(`[AI] Employee created: ${actionResult.employee_id}`);
+        // Optionally trigger a page refresh or update the employee list
+        if (window.location.hash === '#/employees') {
+            // Refresh the employees page if we're on it
+            setTimeout(() => {
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }, 1500);
+        }
     }
 }
 
