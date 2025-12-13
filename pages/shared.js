@@ -3240,27 +3240,10 @@ export const renderMeetPage = async () => {
                 renderCallList();
                 syncCallBannerState();
             } catch (err) {
-                console.error('Failed to apply participant update', err);
+                console.error('applyServerParticipantUpdate error', err);
+                try { closeCallModal(); } catch (_) {}
             }
         };
-        try {
-            (window).__onParticipantUpdate = applyServerParticipantUpdate;
-        } catch (_) {
-        }
-        if (callCloseBtn) {
-            callCloseBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                closeCallModal();
-            });
-        }
-        if (callCancelBtn) {
-            callCancelBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                closeCallModal();
-            });
-        }
         if (callModal) {
             callModal.addEventListener('click', (ev) => {
                 if (ev.target === callModal) {
