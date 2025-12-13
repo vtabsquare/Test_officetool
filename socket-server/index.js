@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
+const attachChatModule = require('./chat_module');
 
 const PORT = process.env.PORT || 4000;
 const allowedOrigins = (process.env.SOCKET_ORIGINS || '')
@@ -26,6 +27,9 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
+// Attach chat module so this server handles BOTH meet and chat
+attachChatModule(io);
 
 const activeCalls = {};
 const userSockets = {};
@@ -105,8 +109,99 @@ function broadcastParticipantUpdate(call) {
 
 app.post('/emit', (req, res) => {
   try {
-    const { admin_id, title, meet_url, participants } = req.body || {};
-    console.log('[SOCKET-SERVER] /emit called with:', {
+    const body = req.body || {};
+
+    // -----------------------------------------
+    // MODE 1: Chat bridge  (backend/chats.py)
+    // expects: { event, data }
+    // -----------------------------------------
+    if (body.event) {
+      const { event, data } = body;
+      if (!event) {
+        return res.status(400).json({ success: false, error: 'event_required' });
+      }
+
+      console.log('[SOCKET-SERVER] /emit (chat)', { event, data });
+
+      const emitToConversation = (evt, payload) => {
+        if (payload && payload.conversation_id) {
+          const room = String(payload.conversation_id);
+          io.to(room).emit(evt, payload);
+        } else {
+          io.emit(evt, payload);
+        }
+      };
+
+      switch (event) {
+        case 'new_message': {
+          emitToConversation('new_message', data);
+          break;
+        }
+
+        case 'conversation_created': {
+          const members = Array.isArray(data && data.members) ? data.members : [];
+          if (members.length) {
+            members.forEach((uid) => {
+              if (!uid) return;
+              io.to(String(uid)).emit('conversation_created', data);
+            });
+          } else {
+            io.emit('conversation_created', data);
+          }
+          break;
+        }
+
+        case 'group_add_members': {
+          emitToConversation('group_members_added', data);
+          break;
+        }
+
+        case 'group_members_removed':
+        case 'group_remove_members': {
+          emitToConversation('group_members_removed', data);
+          break;
+        }
+
+        case 'group_renamed': {
+          emitToConversation('group_renamed', data);
+          break;
+        }
+
+        case 'group_deleted': {
+          emitToConversation('conversation_deleted', data);
+          break;
+        }
+
+        case 'direct_left': {
+          emitToConversation('user_left_conversation', data);
+          break;
+        }
+
+        case 'message_edited': {
+          io.emit('message_edited', data);
+          break;
+        }
+
+        case 'message_deleted': {
+          io.emit('message_deleted', data);
+          break;
+        }
+
+        default: {
+          // Fallback: broadcast raw event name
+          io.emit(event, data);
+        }
+      }
+
+      return res.json({ success: true });
+    }
+
+    // -----------------------------------------
+    // MODE 2: Meet bridge (existing behaviour)
+    // expects: { admin_id, title, meet_url, participants[] }
+    // -----------------------------------------
+    const { admin_id, title, meet_url, participants } = body;
+    console.log('[SOCKET-SERVER] /emit (meet) called with:', {
       admin_id,
       title,
       meet_url,

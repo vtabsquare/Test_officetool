@@ -1,0 +1,1029 @@
+================================================================================
+        VTAB SQUARE - AI CHATBOT AUTOMATION IMPLEMENTATION PLAN
+                  Gemini AI Integration with Action Capabilities
+================================================================================
+
+Document Version: 1.0
+Date: December 10, 2025
+Project: VTAB Square HR Management System
+Author: AI Implementation Team
+
+================================================================================
+                           EXECUTIVE SUMMARY
+================================================================================
+
+This document outlines a comprehensive plan to integrate Google Gemini AI into
+the VTAB Square HR Management System's chatbot, enabling natural language
+commands to perform CRUD operations across all modules (Employee, Attendance,
+Leave, Assets, Projects, etc.).
+
+GOAL: Allow users to type commands like:
+  "Add a new employee named John Doe with email john@company.com"
+  → System automatically creates the employee record in Dataverse
+
+================================================================================
+                        CURRENT STATE ANALYSIS
+================================================================================
+
+EXISTING AI INFRASTRUCTURE:
+---------------------------
+1. Frontend Component: components/AiAssistant.js
+   - Floating chat panel with sleek UI
+   - Sends queries to /api/ai/query endpoint
+   - Displays responses with markdown formatting
+
+2. Backend AI Services:
+   - ai_hf.py: Hugging Face Inference API integration (Mistral-7B)
+   - ai_gemini.py: Google Gemini API integration (gemini-2.0-flash)
+   - ai_dataverse_service.py: Data context builder for AI
+
+3. API Endpoint: /api/ai/query in unified_server.py
+   - Accepts question, scope, history, currentUser
+   - Builds context from Dataverse
+   - Returns AI-generated answers
+
+CURRENT LIMITATIONS:
+--------------------
+- AI is READ-ONLY (can only answer questions, not perform actions)
+- No intent detection or command parsing
+- No action execution pipeline
+- No confirmation workflow for destructive actions
+
+================================================================================
+                        PROPOSED ARCHITECTURE
+================================================================================
+
+                    ┌─────────────────────────────────────┐
+                    │         USER CHAT INPUT             │
+                    │  "Add employee John Doe..."         │
+                    └─────────────────┬───────────────────┘
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │      INTENT CLASSIFICATION          │
+                    │  (Gemini Function Calling)          │
+                    │                                     │
+                    │  Intents:                           │
+                    │  - QUERY (read-only questions)      │
+                    │  - CREATE_EMPLOYEE                  │
+                    │  - UPDATE_EMPLOYEE                  │
+                    │  - DELETE_EMPLOYEE                  │
+                    │  - APPLY_LEAVE                      │
+                    │  - CREATE_ASSET                     │
+                    │  - etc.                             │
+                    └─────────────────┬───────────────────┘
+                                      │
+                    ┌─────────────────┴───────────────────┐
+                    │                                     │
+              ┌─────▼─────┐                       ┌───────▼───────┐
+              │  QUERY    │                       │    ACTION     │
+              │  INTENT   │                       │    INTENT     │
+              └─────┬─────┘                       └───────┬───────┘
+                    │                                     │
+                    ▼                                     ▼
+        ┌───────────────────┐               ┌─────────────────────────┐
+        │ Current AI Flow   │               │   ENTITY EXTRACTION     │
+        │ (Read Dataverse,  │               │   (Parse parameters)    │
+        │  Generate Answer) │               │                         │
+        └───────────────────┘               │   name: "John Doe"      │
+                                            │   email: "john@co.com"  │
+                                            │   department: "IT"      │
+                                            └───────────┬─────────────┘
+                                                        │
+                                                        ▼
+                                            ┌─────────────────────────┐
+                                            │   VALIDATION LAYER      │
+                                            │   - Required fields     │
+                                            │   - Data format         │
+                                            │   - Permissions check   │
+                                            └───────────┬─────────────┘
+                                                        │
+                                            ┌───────────┴───────────┐
+                                            │                       │
+                                    ┌───────▼───────┐       ┌───────▼───────┐
+                                    │   VALID       │       │   INVALID     │
+                                    └───────┬───────┘       └───────┬───────┘
+                                            │                       │
+                                            ▼                       ▼
+                                    ┌───────────────┐       ┌───────────────┐
+                                    │ CONFIRMATION  │       │ ASK FOR       │
+                                    │ REQUEST       │       │ MISSING INFO  │
+                                    │ (Show preview)│       │               │
+                                    └───────┬───────┘       └───────────────┘
+                                            │
+                                    ┌───────▼───────┐
+                                    │ USER CONFIRMS │
+                                    │ Yes / No      │
+                                    └───────┬───────┘
+                                            │
+                                            ▼
+                                    ┌───────────────────┐
+                                    │ EXECUTE ACTION    │
+                                    │ (Call existing    │
+                                    │  API endpoints)   │
+                                    └───────┬───────────┘
+                                            │
+                                            ▼
+                                    ┌───────────────────┐
+                                    │ RESPONSE TO USER  │
+                                    │ "Employee created │
+                                    │  successfully!"   │
+                                    └───────────────────┘
+
+================================================================================
+                        API OPTIONS & PRICING
+================================================================================
+
+OPTION 1: GOOGLE GEMINI API (RECOMMENDED)
+-----------------------------------------
+Model: gemini-2.0-flash (already configured in ai_gemini.py)
+
+Pricing (as of Dec 2025):
+  - Input: $0.075 per 1M tokens (prompts under 128K)
+  - Output: $0.30 per 1M tokens
+  - Free tier: 15 requests/minute, 1M tokens/month
+
+Features:
+  ✓ Function Calling (native support for action execution)
+  ✓ JSON mode for structured outputs
+  ✓ Multi-turn conversations
+  ✓ Fast response times (~1-2 seconds)
+  ✓ Already integrated in your codebase
+
+API Key Setup:
+  - Get key from: https://aistudio.google.com/apikey
+  - Add to id.env: GEMINI_API_KEY=your_key_here
+
+Estimated Monthly Cost (1000 users, 50 queries/user/month):
+  - ~50,000 queries × ~500 tokens avg = 25M tokens
+  - Cost: ~$10-15/month
+
+
+OPTION 2: OPENAI GPT-4 TURBO
+----------------------------
+Model: gpt-4-turbo-preview
+
+Pricing:
+  - Input: $0.01 per 1K tokens
+  - Output: $0.03 per 1K tokens
+
+Features:
+  ✓ Function Calling (excellent)
+  ✓ JSON mode
+  ✓ Very accurate intent detection
+  ✗ Higher cost
+  ✗ Requires new integration
+
+Estimated Monthly Cost: ~$50-100/month
+
+
+OPTION 3: ANTHROPIC CLAUDE 3
+----------------------------
+Model: claude-3-sonnet
+
+Pricing:
+  - Input: $0.003 per 1K tokens
+  - Output: $0.015 per 1K tokens
+
+Features:
+  ✓ Tool use (function calling)
+  ✓ Excellent reasoning
+  ✗ Requires new integration
+
+Estimated Monthly Cost: ~$20-40/month
+
+
+OPTION 4: HUGGING FACE (CURRENT - LIMITED)
+------------------------------------------
+Model: Mistral-7B-Instruct-v0.2 (already configured)
+
+Pricing:
+  - Free tier available
+  - Pro: $9/month for faster inference
+
+Limitations:
+  ✗ No native function calling
+  ✗ Less reliable for structured extraction
+  ✗ Slower response times
+
+================================================================================
+                    RECOMMENDED: GEMINI IMPLEMENTATION
+================================================================================
+
+PHASE 1: INTENT DETECTION WITH FUNCTION CALLING
+-----------------------------------------------
+
+Gemini supports "Function Calling" which allows the model to:
+1. Understand user intent
+2. Extract structured parameters
+3. Return a function call specification
+
+Example Function Definitions:
+
+```python
+AVAILABLE_FUNCTIONS = [
+    {
+        "name": "create_employee",
+        "description": "Create a new employee record in the HR system",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "first_name": {
+                    "type": "string",
+                    "description": "Employee's first name"
+                },
+                "last_name": {
+                    "type": "string",
+                    "description": "Employee's last name"
+                },
+                "email": {
+                    "type": "string",
+                    "description": "Employee's email address"
+                },
+                "department": {
+                    "type": "string",
+                    "description": "Department name (e.g., IT, HR, Finance)"
+                },
+                "designation": {
+                    "type": "string",
+                    "description": "Job title/designation"
+                },
+                "contact_number": {
+                    "type": "string",
+                    "description": "Phone number"
+                },
+                "date_of_joining": {
+                    "type": "string",
+                    "description": "Date of joining in YYYY-MM-DD format"
+                }
+            },
+            "required": ["first_name", "last_name", "email"]
+        }
+    },
+    {
+        "name": "apply_leave",
+        "description": "Apply for leave on behalf of an employee",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "employee_id": {
+                    "type": "string",
+                    "description": "Employee ID (e.g., EMP001)"
+                },
+                "leave_type": {
+                    "type": "string",
+                    "enum": ["Casual Leave", "Sick Leave", "Comp Off"],
+                    "description": "Type of leave"
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Leave start date (YYYY-MM-DD)"
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "Leave end date (YYYY-MM-DD)"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for leave"
+                }
+            },
+            "required": ["employee_id", "leave_type", "start_date", "end_date"]
+        }
+    },
+    {
+        "name": "update_employee",
+        "description": "Update an existing employee's information",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "employee_id": {
+                    "type": "string",
+                    "description": "Employee ID to update"
+                },
+                "updates": {
+                    "type": "object",
+                    "description": "Fields to update (email, department, designation, etc.)"
+                }
+            },
+            "required": ["employee_id", "updates"]
+        }
+    },
+    {
+        "name": "create_asset",
+        "description": "Register a new company asset",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "asset_type": {
+                    "type": "string",
+                    "enum": ["Laptop", "Monitor", "Keyboard", "Mouse", "Headset", "Charger"],
+                    "description": "Type of asset"
+                },
+                "brand": {
+                    "type": "string",
+                    "description": "Brand name"
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Model name/number"
+                },
+                "serial_number": {
+                    "type": "string",
+                    "description": "Serial number"
+                },
+                "assigned_to": {
+                    "type": "string",
+                    "description": "Employee ID to assign to (optional)"
+                }
+            },
+            "required": ["asset_type", "brand"]
+        }
+    },
+    {
+        "name": "query_data",
+        "description": "Answer questions about HR data (employees, attendance, leaves, etc.)",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The user's question"
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": ["employee", "attendance", "leave", "asset", "general"],
+                    "description": "Data scope for the query"
+                }
+            },
+            "required": ["query"]
+        }
+    }
+]
+```
+
+================================================================================
+                        IMPLEMENTATION STEPS
+================================================================================
+
+STEP 1: CREATE AI ACTION SERVICE (Backend)
+------------------------------------------
+File: backend/ai_action_service.py
+
+Purpose: Handle intent detection and action execution
+
+```python
+# ai_action_service.py - AI Action Execution Service
+import os
+import json
+import requests
+from typing import Dict, Any, Optional, List
+from dotenv import load_dotenv
+
+load_dotenv("id.env")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+# Function definitions for Gemini
+AVAILABLE_FUNCTIONS = [
+    # ... (as defined above)
+]
+
+def detect_intent_and_extract(
+    user_message: str,
+    user_meta: Dict[str, Any],
+    conversation_history: List[Dict] = None
+) -> Dict[str, Any]:
+    """
+    Use Gemini to detect intent and extract parameters from user message.
+    
+    Returns:
+        {
+            "intent": "create_employee" | "query_data" | etc.,
+            "parameters": {...extracted params...},
+            "confidence": 0.95,
+            "requires_confirmation": True/False
+        }
+    """
+    system_prompt = f"""You are an HR assistant that helps users manage employee data.
+    
+Current User: {user_meta.get('name')} (Role: {'Admin' if user_meta.get('is_admin') else 'Employee'})
+
+Analyze the user's message and determine:
+1. What action they want to perform
+2. Extract all relevant parameters
+3. If it's a question, use query_data function
+
+Be precise with parameter extraction. If information is missing, still return what you have."""
+
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": f"{system_prompt}\n\nUser message: {user_message}"}]}
+        ],
+        "tools": [{"function_declarations": AVAILABLE_FUNCTIONS}],
+        "generationConfig": {
+            "temperature": 0.1,  # Low temperature for consistent extraction
+        }
+    }
+    
+    response = requests.post(
+        f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=30
+    )
+    
+    if response.status_code != 200:
+        return {"intent": "error", "error": response.text}
+    
+    result = response.json()
+    # Parse function call from response
+    # ... implementation details
+    
+    return parsed_intent
+
+
+def validate_action_params(intent: str, params: Dict) -> Dict[str, Any]:
+    """
+    Validate extracted parameters against required fields.
+    
+    Returns:
+        {
+            "valid": True/False,
+            "missing_fields": ["email", "department"],
+            "validation_errors": ["Invalid email format"]
+        }
+    """
+    # Validation logic per intent type
+    pass
+
+
+def execute_action(
+    intent: str,
+    params: Dict[str, Any],
+    token: str,
+    user_meta: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Execute the detected action by calling existing API endpoints.
+    
+    Returns:
+        {
+            "success": True/False,
+            "result": {...created/updated record...},
+            "message": "Employee John Doe created successfully with ID EMP042"
+        }
+    """
+    # Map intents to API calls
+    pass
+```
+
+
+STEP 2: UPDATE AI QUERY ENDPOINT (Backend)
+------------------------------------------
+File: backend/unified_server.py
+
+Modify /api/ai/query to support actions:
+
+```python
+@app.route("/api/ai/query", methods=["POST"])
+def ai_query():
+    data = request.get_json(force=True)
+    question = data.get("question", "").strip()
+    current_user = data.get("currentUser", {})
+    action_mode = data.get("actionMode", False)  # NEW: Enable action mode
+    pending_action = data.get("pendingAction")    # NEW: For confirmations
+    
+    user_meta = {
+        "name": current_user.get("name", "User"),
+        "email": current_user.get("email", ""),
+        "employee_id": current_user.get("employee_id"),
+        "is_admin": current_user.get("is_admin", False),
+    }
+    
+    # If there's a pending action confirmation
+    if pending_action and question.lower() in ["yes", "confirm", "proceed"]:
+        result = execute_action(
+            pending_action["intent"],
+            pending_action["params"],
+            get_access_token(),
+            user_meta
+        )
+        return jsonify({
+            "success": True,
+            "action_executed": True,
+            "result": result
+        })
+    
+    # Detect intent
+    intent_result = detect_intent_and_extract(question, user_meta)
+    
+    if intent_result["intent"] == "query_data":
+        # Existing read-only flow
+        # ... current implementation
+        pass
+    else:
+        # Action intent detected
+        validation = validate_action_params(
+            intent_result["intent"],
+            intent_result["parameters"]
+        )
+        
+        if not validation["valid"]:
+            # Ask for missing information
+            return jsonify({
+                "success": True,
+                "action_detected": True,
+                "needs_info": True,
+                "missing_fields": validation["missing_fields"],
+                "answer": f"I need more information to {intent_result['intent']}. Please provide: {', '.join(validation['missing_fields'])}"
+            })
+        
+        # Return confirmation request
+        preview = generate_action_preview(
+            intent_result["intent"],
+            intent_result["parameters"]
+        )
+        
+        return jsonify({
+            "success": True,
+            "action_detected": True,
+            "requires_confirmation": True,
+            "intent": intent_result["intent"],
+            "parameters": intent_result["parameters"],
+            "preview": preview,
+            "answer": f"I'm about to {preview}. Do you want me to proceed? (Yes/No)"
+        })
+```
+
+
+STEP 3: UPDATE FRONTEND CHAT COMPONENT
+--------------------------------------
+File: components/AiAssistant.js
+
+Add action handling and confirmation UI:
+
+```javascript
+// Add state for pending actions
+let pendingAction = null;
+
+async function sendMessage(question) {
+    // ... existing code ...
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/ai/query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question,
+                currentUser: state.user || {},
+                history: messages.slice(-10),
+                actionMode: true,  // Enable action mode
+                pendingAction: pendingAction  // Include pending action if confirming
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.action_detected && data.requires_confirmation) {
+            // Store pending action
+            pendingAction = {
+                intent: data.intent,
+                params: data.parameters
+            };
+            
+            // Show confirmation UI
+            appendMessage('assistant', data.answer);
+            showConfirmationButtons();
+        } else if (data.action_executed) {
+            // Action was executed
+            pendingAction = null;
+            appendMessage('assistant', `✅ ${data.result.message}`);
+            hideConfirmationButtons();
+        } else {
+            // Regular query response
+            appendMessage('assistant', data.answer);
+        }
+    } catch (error) {
+        // ... error handling
+    }
+}
+
+function showConfirmationButtons() {
+    const container = document.getElementById('ai-messages');
+    const btnDiv = document.createElement('div');
+    btnDiv.className = 'ai-confirmation-buttons';
+    btnDiv.innerHTML = `
+        <button class="ai-confirm-btn ai-confirm-yes" onclick="confirmAction(true)">
+            ✓ Yes, proceed
+        </button>
+        <button class="ai-confirm-btn ai-confirm-no" onclick="confirmAction(false)">
+            ✗ Cancel
+        </button>
+    `;
+    container.appendChild(btnDiv);
+}
+
+function confirmAction(confirmed) {
+    if (confirmed) {
+        sendMessage('yes');
+    } else {
+        pendingAction = null;
+        appendMessage('assistant', 'Action cancelled.');
+    }
+    hideConfirmationButtons();
+}
+```
+
+
+STEP 4: ADD PERMISSION CHECKS
+-----------------------------
+File: backend/ai_action_service.py
+
+```python
+PERMISSION_MATRIX = {
+    "create_employee": ["Admin", "HR Manager"],
+    "update_employee": ["Admin", "HR Manager"],
+    "delete_employee": ["Admin"],
+    "apply_leave": ["Admin", "HR Manager", "Employee"],  # Employee can apply for self
+    "approve_leave": ["Admin", "HR Manager"],
+    "create_asset": ["Admin", "IT Manager"],
+    "assign_asset": ["Admin", "IT Manager"],
+    "query_data": ["Admin", "HR Manager", "Employee"],  # Read access for all
+}
+
+def check_permission(intent: str, user_meta: Dict) -> bool:
+    """Check if user has permission to execute the action."""
+    user_role = "Admin" if user_meta.get("is_admin") else "Employee"
+    allowed_roles = PERMISSION_MATRIX.get(intent, [])
+    return user_role in allowed_roles
+```
+
+================================================================================
+                        SUPPORTED ACTIONS (PHASE 1)
+================================================================================
+
+1. CREATE_EMPLOYEE
+   Trigger phrases:
+   - "Add a new employee named John Doe"
+   - "Create employee record for Sarah with email sarah@company.com"
+   - "Register new hire: Mike Johnson, IT department, Software Engineer"
+   
+   Required: first_name, last_name, email
+   Optional: department, designation, contact_number, date_of_joining
+
+2. UPDATE_EMPLOYEE
+   Trigger phrases:
+   - "Update John Doe's email to john.doe@company.com"
+   - "Change EMP001's department to Finance"
+   - "Set designation of Sarah to Senior Developer"
+   
+   Required: employee_id OR employee_name, at least one field to update
+
+3. APPLY_LEAVE
+   Trigger phrases:
+   - "Apply casual leave for tomorrow"
+   - "Request sick leave from Dec 15 to Dec 17"
+   - "Book comp off for next Monday"
+   
+   Required: leave_type, start_date, end_date
+   Optional: reason
+
+4. CREATE_ASSET
+   Trigger phrases:
+   - "Register new laptop Dell XPS 15"
+   - "Add asset: MacBook Pro, serial ABC123"
+   - "Create keyboard entry for Logitech MX Keys"
+   
+   Required: asset_type, brand
+   Optional: model, serial_number, assigned_to
+
+5. QUERY_DATA (existing)
+   Trigger phrases:
+   - "How many employees are active?"
+   - "Show my attendance for this month"
+   - "What's my leave balance?"
+
+================================================================================
+                        FUTURE SCOPE (PHASE 2+)
+================================================================================
+
+PHASE 2: ADVANCED ACTIONS
+-------------------------
+1. Bulk Operations
+   - "Add these 5 employees from the list I'm pasting"
+   - "Apply leave for entire IT team on Dec 25"
+
+2. Complex Queries with Actions
+   - "Find all employees without assigned laptops and create a report"
+   - "Show employees with low attendance and send them a reminder"
+
+3. Workflow Automation
+   - "When a new employee is added, automatically create their login"
+   - "Notify HR when leave balance is low"
+
+PHASE 3: MULTI-MODAL INPUT
+--------------------------
+1. Voice Commands
+   - Integrate Web Speech API for voice input
+   - "Hey HR Bot, add employee John Doe"
+
+2. Document Processing
+   - Upload resume → Extract employee details
+   - Upload CSV → Bulk import with AI validation
+
+3. Image Recognition
+   - Upload ID card → Extract employee info
+   - Scan asset barcode → Auto-fill asset details
+
+PHASE 4: PROACTIVE ASSISTANT
+----------------------------
+1. Smart Suggestions
+   - "I noticed 3 employees haven't checked in today. Want me to send reminders?"
+   - "John's leave balance is running low. Should I notify him?"
+
+2. Anomaly Detection
+   - "Unusual attendance pattern detected for EMP015"
+   - "Asset LP-042 hasn't been used in 30 days"
+
+3. Scheduled Actions
+   - "Remind me to review leave requests every Monday"
+   - "Generate attendance report every month-end"
+
+PHASE 5: INTEGRATION EXPANSION
+------------------------------
+1. Email Integration
+   - "Send offer letter to john@email.com"
+   - "Email attendance report to HR team"
+
+2. Calendar Integration
+   - "Block calendar for team meeting next Tuesday"
+   - "Schedule interview with candidate"
+
+3. External Systems
+   - Slack/Teams notifications
+   - Payroll system integration
+   - Background verification APIs
+
+================================================================================
+                        SECURITY CONSIDERATIONS
+================================================================================
+
+1. AUTHENTICATION
+   - All actions require valid user session
+   - API key stored securely in environment variables
+   - Token-based authentication for Dataverse
+
+2. AUTHORIZATION
+   - Role-based permission matrix
+   - Admin-only actions clearly marked
+   - Audit logging for all actions
+
+3. DATA VALIDATION
+   - Input sanitization before Dataverse calls
+   - Email format validation
+   - Date range validation
+   - Duplicate detection
+
+4. CONFIRMATION WORKFLOW
+   - All destructive actions require explicit confirmation
+   - Preview of changes before execution
+   - Cancel option always available
+
+5. RATE LIMITING
+   - Limit AI API calls per user
+   - Prevent abuse of action endpoints
+   - Implement cooldown for bulk operations
+
+6. AUDIT TRAIL
+   - Log all AI-initiated actions
+   - Store: user, timestamp, intent, parameters, result
+   - Enable rollback for critical actions
+
+================================================================================
+                        COST ESTIMATION
+================================================================================
+
+GEMINI API COSTS (Recommended):
+-------------------------------
+Assumptions:
+- 100 active users
+- 30 queries/user/day average
+- 500 tokens per query (input + output)
+
+Monthly Usage:
+- 100 users × 30 queries × 30 days = 90,000 queries
+- 90,000 × 500 tokens = 45,000,000 tokens (45M)
+
+Cost Breakdown:
+- Input tokens (60%): 27M × $0.075/1M = $2.03
+- Output tokens (40%): 18M × $0.30/1M = $5.40
+- Total: ~$7.50/month
+
+With Free Tier (1M tokens/month):
+- First 1M tokens: FREE
+- Remaining 44M: ~$7.00
+- Total: ~$7.00/month
+
+INFRASTRUCTURE COSTS:
+---------------------
+- No additional servers required
+- Uses existing Flask backend
+- Uses existing Dataverse storage
+
+TOTAL ESTIMATED MONTHLY COST: $7-15/month
+
+================================================================================
+                        IMPLEMENTATION TIMELINE
+================================================================================
+
+WEEK 1: Foundation
+------------------
+Day 1-2: Set up Gemini API with function calling
+Day 3-4: Implement intent detection service
+Day 5: Create action execution framework
+
+WEEK 2: Core Actions
+--------------------
+Day 1-2: Implement CREATE_EMPLOYEE action
+Day 3-4: Implement UPDATE_EMPLOYEE action
+Day 5: Implement APPLY_LEAVE action
+
+WEEK 3: Frontend & Testing
+--------------------------
+Day 1-2: Update AiAssistant.js with confirmation UI
+Day 3-4: Add permission checks and validation
+Day 5: Integration testing
+
+WEEK 4: Polish & Deploy
+-----------------------
+Day 1-2: Error handling and edge cases
+Day 3: Security review
+Day 4: Documentation
+Day 5: Production deployment
+
+================================================================================
+                        FILES TO CREATE/MODIFY
+================================================================================
+
+NEW FILES:
+----------
+1. backend/ai_action_service.py
+   - Intent detection with Gemini function calling
+   - Action execution logic
+   - Permission matrix
+   - Validation helpers
+
+2. backend/ai_function_definitions.py
+   - All function schemas for Gemini
+   - Parameter validation rules
+
+MODIFIED FILES:
+---------------
+1. backend/unified_server.py
+   - Update /api/ai/query endpoint
+   - Add action execution routes
+
+2. components/AiAssistant.js
+   - Add confirmation UI
+   - Handle action responses
+   - Add pending action state
+
+3. backend/ai_gemini.py
+   - Add function calling support
+   - Update API payload structure
+
+4. backend/id.env
+   - Ensure GEMINI_API_KEY is set
+
+================================================================================
+                        TESTING CHECKLIST
+================================================================================
+
+UNIT TESTS:
+-----------
+[ ] Intent detection accuracy
+[ ] Parameter extraction correctness
+[ ] Validation logic
+[ ] Permission checks
+
+INTEGRATION TESTS:
+------------------
+[ ] Create employee via chat
+[ ] Update employee via chat
+[ ] Apply leave via chat
+[ ] Query data via chat
+[ ] Confirmation workflow
+[ ] Cancel action workflow
+
+EDGE CASES:
+-----------
+[ ] Missing required fields
+[ ] Invalid data formats
+[ ] Duplicate records
+[ ] Permission denied scenarios
+[ ] API timeout handling
+[ ] Concurrent action requests
+
+SECURITY TESTS:
+---------------
+[ ] SQL injection prevention
+[ ] XSS prevention
+[ ] Authorization bypass attempts
+[ ] Rate limiting effectiveness
+
+================================================================================
+                        SAMPLE CONVERSATIONS
+================================================================================
+
+EXAMPLE 1: Create Employee
+--------------------------
+User: "Add a new employee John Smith, email john.smith@company.com, IT department"
+
+AI: "I'm about to create a new employee record:
+     • Name: John Smith
+     • Email: john.smith@company.com
+     • Department: IT
+     
+     Do you want me to proceed? (Yes/No)"
+
+User: "Yes"
+
+AI: "✅ Employee created successfully!
+     • Employee ID: EMP043
+     • Name: John Smith
+     • Email: john.smith@company.com
+     • Department: IT
+     • Login credentials sent to email"
+
+
+EXAMPLE 2: Missing Information
+------------------------------
+User: "Create employee record for Sarah"
+
+AI: "I need more information to create the employee record. Please provide:
+     • Last name
+     • Email address
+     
+     You can say something like: 'Sarah Johnson, email sarah@company.com'"
+
+
+EXAMPLE 3: Permission Denied
+----------------------------
+User (Employee role): "Delete employee EMP001"
+
+AI: "Sorry, I can't perform this action. Deleting employees requires Admin privileges.
+     Please contact your HR administrator."
+
+
+EXAMPLE 4: Query (Read-only)
+----------------------------
+User: "How many employees are in the IT department?"
+
+AI: "Based on the current data:
+     • IT Department has 12 active employees
+     • 2 are on leave today
+     • Average tenure: 2.3 years"
+
+================================================================================
+                        CONCLUSION
+================================================================================
+
+This implementation plan provides a comprehensive roadmap for integrating
+AI-powered automation into the VTAB Square HR Management System. The use of
+Google Gemini's function calling capability enables natural language commands
+to be translated into structured actions, while maintaining security through
+permission checks and confirmation workflows.
+
+Key Benefits:
+✓ Natural language interface for HR operations
+✓ Reduced manual data entry
+✓ Consistent data validation
+✓ Audit trail for all actions
+✓ Scalable architecture for future enhancements
+✓ Cost-effective (~$7-15/month)
+
+The phased approach allows for incremental deployment and testing, ensuring
+system stability while progressively adding new capabilities.
+
+================================================================================
+                        APPENDIX: API REFERENCE
+================================================================================
+
+GEMINI API ENDPOINT:
+https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+
+FUNCTION CALLING DOCUMENTATION:
+https://ai.google.dev/gemini-api/docs/function-calling
+
+PRICING PAGE:
+https://ai.google.dev/pricing
+
+API KEY GENERATION:
+https://aistudio.google.com/apikey
+
+================================================================================
+                           END OF DOCUMENT
+================================================================================

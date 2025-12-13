@@ -27,6 +27,7 @@ from project_contributors import bp as contributors_bp
 from project_boards import bp as boards_bp
 from project_tasks import tasks_bp
 from project_column import columns_bp
+from chats import chat_bp
 
 from time_tracking import bp_time as time_bp
 from google_token_store import save_google_token, load_google_token
@@ -40,6 +41,7 @@ app.register_blueprint(boards_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(columns_bp)
 app.register_blueprint(time_bp)
+app.register_blueprint(chat_bp)
 
 allowed_origins = os.getenv("CORS_ORIGINS", "")
 origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]

@@ -48,14 +48,17 @@ export const getSidebarHTML = () => {
             </ul>
         </li>
         `
-            : ''
+            : ""
         }
         <li><a href="#/inbox" class="nav-link" data-page="inbox"><i class="fa-solid fa-inbox"></i> Inbox</a></li>
+        <li><a href="#/chat" class="nav-link" data-page="chat">
+            <i class="fa-solid fa-comments"></i> Chat
+        </a></li>
         <li><a href="#/meet" class="nav-link" data-page="meet"><i class="fa-solid fa-video"></i> Meet</a></li>
         ${
           isL3
             ? '<li><a href="#/onboarding" class="nav-link" data-page="onboarding"><i class="fa-solid fa-user-plus"></i> Onboarding</a></li>'
-            : ''
+            : ""
         }
         <li class="nav-group" data-group="time-tracker">
             <a href="#" class="nav-link nav-toggle">
@@ -71,12 +74,12 @@ export const getSidebarHTML = () => {
                 ${
                   isAdmin
                     ? '<li><a href="#/time-team-timesheet" class="nav-link" data-page="time-team-timesheet">My Team Timesheet</a></li>'
-                    : ''
+                    : ""
                 }
                 ${
                   isL3
                     ? '<li><a href="#/time-clients" class="nav-link" data-page="time-clients">Clients</a></li>'
-                    : ''
+                    : ""
                 }
                 <li><a href="#/time-projects" class="nav-link" data-page="time-projects">Projects</a></li>
             </ul>
@@ -136,7 +139,7 @@ export const getSidebarHTML = () => {
                 <li><a href="#/login-settings" class="nav-link" data-page="login-settings">Login Settings</a></li>
             </ul>
         </li>`
-            : ''
+            : ""
         }
 
     </ul>
