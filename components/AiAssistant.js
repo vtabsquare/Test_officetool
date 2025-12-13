@@ -341,7 +341,8 @@ async function sendMessage(question) {
             
             // If an action was executed (e.g., employee created), show success indicator
             if (data.actionResult) {
-                showActionSuccess(data.actionResult);
+                console.log('[AI] Action result received:', data.actionResult);
+                await showActionSuccess(data.actionResult);
             }
         } else {
             appendMessage('assistant', data.error || 'Sorry, I encountered an error. Please try again.');
