@@ -355,7 +355,7 @@ async function sendMessage(question) {
     }
 }
 
-function showActionSuccess(actionResult) {
+async function showActionSuccess(actionResult) {
     // Show a brief toast/notification for successful actions
     if (actionResult.employee_id) {
         console.log(`[AI] Employee action completed: ${actionResult.employee_id}`);
@@ -372,6 +372,91 @@ function showActionSuccess(actionResult) {
             window.dispatchEvent(new CustomEvent('employeeDataChanged', {
                 detail: { employee_id: actionResult.employee_id, action: actionResult.message }
             }));
+        }, 500);
+    }
+    
+    // Handle check-in action - update the timer button UI
+    if (actionResult.checkin_time) {
+        console.log(`[AI] Check-in completed at: ${actionResult.checkin_time}`);
+        
+        try {
+            // Import timer functions and state
+            const { updateTimerButton, updateTimerDisplay } = await import('../features/timer.js');
+            
+            // Update state to reflect check-in
+            state.timer.isRunning = true;
+            state.timer.startTime = Date.now();
+            
+            // If there's existing time from today, adjust the start time
+            if (actionResult.total_seconds_today) {
+                state.timer.startTime = Date.now() - (actionResult.total_seconds_today * 1000);
+            }
+            
+            // Start the timer interval
+            if (state.timer.intervalId) {
+                clearInterval(state.timer.intervalId);
+            }
+            state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
+            
+            // Save to localStorage
+            localStorage.setItem('timerState', JSON.stringify({ 
+                isRunning: true, 
+                startTime: state.timer.startTime 
+            }));
+            
+            // Update the button UI
+            updateTimerButton();
+            updateTimerDisplay();
+            
+            console.log('[AI] Timer button updated to CHECK OUT state');
+        } catch (err) {
+            console.error('[AI] Failed to update timer button:', err);
+        }
+    }
+    
+    // Handle check-out action - update the timer button UI
+    if (actionResult.checkout_time) {
+        console.log(`[AI] Check-out completed at: ${actionResult.checkout_time}`);
+        
+        try {
+            // Import timer functions
+            const { updateTimerButton, updateTimerDisplay } = await import('../features/timer.js');
+            
+            // Stop the timer
+            if (state.timer.intervalId) {
+                clearInterval(state.timer.intervalId);
+            }
+            state.timer.isRunning = false;
+            state.timer.intervalId = null;
+            state.timer.startTime = null;
+            
+            // Clear localStorage
+            localStorage.removeItem('timerState');
+            
+            // Update the button UI
+            updateTimerButton();
+            updateTimerDisplay();
+            
+            console.log('[AI] Timer button updated to CHECK IN state');
+            
+            // Refresh attendance page if on it
+            if (window.location.hash.includes('attendance')) {
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }
+        } catch (err) {
+            console.error('[AI] Failed to update timer button:', err);
+        }
+    }
+    
+    // Handle asset creation
+    if (actionResult.asset_id) {
+        console.log(`[AI] Asset created: ${actionResult.asset_id}`);
+        
+        // Refresh assets page if on it
+        setTimeout(() => {
+            if (window.location.hash.includes('assets')) {
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }
         }, 500);
     }
 }
