@@ -553,16 +553,21 @@ def _fetch_login_activity_record(token: str, employee_id: str, date_str: str):
 def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload: dict):
     emp = (employee_id or "").strip().upper()
     dt = (date_str or "").strip()
+    print(f"[LOGIN-ACTIVITY-UPSERT] emp={emp} date={dt} payload={payload}")
     if not emp or not dt:
+        print(f"[LOGIN-ACTIVITY-UPSERT] SKIP: missing emp or date")
         return None
     patch_payload = dict(payload or {})
     if not patch_payload:
+        print(f"[LOGIN-ACTIVITY-UPSERT] SKIP: empty payload")
         return None
 
     existing = None
     try:
         existing = _fetch_login_activity_record(token, emp, dt)
-    except Exception:
+        print(f"[LOGIN-ACTIVITY-UPSERT] existing record: {existing}")
+    except Exception as fetch_err:
+        print(f"[LOGIN-ACTIVITY-UPSERT] fetch error: {fetch_err}")
         existing = None
 
     headers = {
@@ -577,7 +582,9 @@ def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload:
         record_id = str(existing.get(LOGIN_ACTIVITY_PRIMARY_FIELD)).strip("{}")
         url = f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}({record_id})"
         patch_headers = {**headers, "If-Match": "*"}
+        print(f"[LOGIN-ACTIVITY-UPSERT] PATCH url={url} payload={patch_payload}")
         r = requests.patch(url, headers=patch_headers, json=patch_payload, timeout=20)
+        print(f"[LOGIN-ACTIVITY-UPSERT] PATCH response: {r.status_code} {r.text[:500] if r.text else ''}")
         if r.status_code in (204, 200):
             return record_id
         raise Exception(f"Dataverse update failed ({r.status_code}): {r.text}")
@@ -588,7 +595,9 @@ def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload:
         **patch_payload,
     }
     create_headers = {**headers, "Prefer": "return=representation"}
+    print(f"[LOGIN-ACTIVITY-UPSERT] POST url={BASE_URL}/{LOGIN_ACTIVITY_ENTITY} payload={create_payload}")
     r = requests.post(f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}", headers=create_headers, json=create_payload, timeout=20)
+    print(f"[LOGIN-ACTIVITY-UPSERT] POST response: {r.status_code} {r.text[:500] if r.text else ''}")
     if r.status_code in (200, 201):
         body = r.json() if r.content else {}
         rid = body.get(LOGIN_ACTIVITY_PRIMARY_FIELD) or body.get("id")
@@ -695,12 +704,16 @@ def _fetch_all_employee_ids(token: str):
 
 def _sync_login_activity_from_event(event: dict):
     try:
+        print(f"[LOGIN-ACTIVITY-SYNC] event={event}")
         if not event or not isinstance(event, dict):
+            print(f"[LOGIN-ACTIVITY-SYNC] SKIP: invalid event")
             return
         emp = (event.get("employee_id") or "").strip().upper()
         et = (event.get("event_type") or "").strip().lower()
         local_date, local_time_iso = _event_local_date_time(event)
+        print(f"[LOGIN-ACTIVITY-SYNC] emp={emp} type={et} local_date={local_date} local_time_iso={local_time_iso}")
         if not emp or not local_date or not local_time_iso or et not in ("check_in", "check_out"):
+            print(f"[LOGIN-ACTIVITY-SYNC] SKIP: missing required fields")
             return
 
         # Some Dataverse schemas use Time-only columns for checkin/checkout.
