@@ -3,13 +3,25 @@
 import { state } from '../state.js';
 import { getPageContentHTML } from '../utils.js';
 import { renderModal, closeModal } from '../components/modal.js';
-import { listLoginAccounts, createLoginAccount, updateLoginAccount, deleteLoginAccount, fetchLoginEvents } from '../features/loginSettingsApi.js';
+import { listLoginAccounts, createLoginAccount, updateLoginAccount, deleteLoginAccount, fetchLoginEvents, updateLoginActivity } from '../features/loginSettingsApi.js';
 
 const isAdminUser = () => {
     const empId = String(state.user?.id || '').trim().toUpperCase();
     const email = String(state.user?.email || '').trim().toLowerCase();
     const flag = !!state.user?.is_admin;
     return flag || empId === 'EMP001' || email === 'bala.t@vtab.com';
+};
+
+const attachLoginActivityHandlers = (dailySummary = []) => {
+    const editButtons = document.querySelectorAll('.la-edit-btn');
+    editButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const emp = btn.getAttribute('data-employee-id');
+            const dt = btn.getAttribute('data-date');
+            const row = dailySummary.find((r) => String(r.employee_id) === String(emp) && String(r.date) === String(dt));
+            openEditLoginActivityModal(row);
+        });
+    });
 };
 
 const formatLastLogin = (value) => {
@@ -82,6 +94,117 @@ const formatLocation = (loc) => {
     return '<span class="text-muted">Not shared</span>';
 };
 
+const normalizeTimeInputToISO = (dateStr, timeStr) => {
+    const d = String(dateStr || '').trim();
+    const t = String(timeStr || '').trim();
+    if (!d || !t) return null;
+
+    // If user pasted an ISO string, accept as-is
+    if (t.includes('T') && t.includes('Z')) return t;
+
+    // Accept HH:mm or HH:mm:ss (as local time). Store as UTC ISO for Dataverse.
+    const full = t.length === 5 ? `${t}:00` : t;
+    const dt = new Date(`${d}T${full}`);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toISOString();
+};
+
+const formatISOToTimeInput = (isoString) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return '';
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+};
+
+const openEditLoginActivityModal = (row) => {
+    if (!row) return;
+    const formHTML = `
+        <div class="modal-form modern-form team-modal">
+            <div class="form-section">
+                <div class="form-section-header">
+                    <div>
+                        <p class="form-eyebrow">LOGIN SETTINGS</p>
+                        <h3>Edit login activity</h3>
+                    </div>
+                </div>
+                <input type="hidden" id="la-employee-id" value="${row.employee_id || ''}" />
+                <input type="hidden" id="la-date" value="${row.date || ''}" />
+                <div class="form-grid two-col">
+                    <div class="form-field">
+                        <label class="form-label">Employee ID</label>
+                        <input class="input-control" type="text" value="${row.employee_id || ''}" disabled />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Date</label>
+                        <input class="input-control" type="text" value="${row.date || ''}" disabled />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="la-checkin-time">Check-in Time (HH:mm:ss)</label>
+                        <input id="la-checkin-time" class="input-control" type="text" placeholder="09:30:00" value="${formatISOToTimeInput(row.check_in_time)}" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="la-checkin-location">Check-in Location</label>
+                        <input id="la-checkin-location" class="input-control" type="text" placeholder="Chennai" value="${row.check_in_location || ''}" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="la-checkout-time">Check-out Time (HH:mm:ss)</label>
+                        <input id="la-checkout-time" class="input-control" type="text" placeholder="18:10:00" value="${formatISOToTimeInput(row.check_out_time)}" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label" for="la-checkout-location">Check-out Location</label>
+                        <input id="la-checkout-location" class="input-control" type="text" placeholder="Chennai" value="${row.check_out_location || ''}" />
+                    </div>
+                </div>
+                <p class="helper-text">Only check-in/out time and location are editable. Employee ID and Date are read-only.</p>
+            </div>
+        </div>
+    `;
+
+    renderModal('Edit Login Activity', formHTML, 'update-login-activity-btn');
+
+    const form = document.getElementById('modal-form');
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await handleUpdateLoginActivity();
+        };
+    }
+};
+
+const handleUpdateLoginActivity = async () => {
+    try {
+        const employee_id = document.getElementById('la-employee-id')?.value?.trim()?.toUpperCase();
+        const dateStr = document.getElementById('la-date')?.value?.trim();
+        if (!employee_id || !dateStr) return;
+
+        const checkInTimeRaw = document.getElementById('la-checkin-time')?.value;
+        const checkOutTimeRaw = document.getElementById('la-checkout-time')?.value;
+        const checkInLocation = document.getElementById('la-checkin-location')?.value?.trim() || null;
+        const checkOutLocation = document.getElementById('la-checkout-location')?.value?.trim() || null;
+
+        const checkInTimeISO = normalizeTimeInputToISO(dateStr, checkInTimeRaw);
+        const checkOutTimeISO = normalizeTimeInputToISO(dateStr, checkOutTimeRaw);
+
+        await updateLoginActivity({
+            employee_id,
+            date: dateStr,
+            check_in_time: checkInTimeISO,
+            check_in_location: checkInLocation,
+            check_out_time: checkOutTimeISO,
+            check_out_location: checkOutLocation,
+        });
+
+        closeModal();
+        await renderLoginSettingsPage();
+    } catch (err) {
+        console.error('Error updating login activity:', err);
+        alert(err.message || 'Failed to update login activity');
+    }
+};
+
 const buildLoginActivityHTML = (dailySummary = []) => {
     if (!dailySummary.length) {
         return `
@@ -101,6 +224,11 @@ const buildLoginActivityHTML = (dailySummary = []) => {
             <td>${formatLocation(item.check_in_location)}</td>
             <td>${formatTime(item.check_out_time)}</td>
             <td>${formatLocation(item.check_out_location)}</td>
+            <td>
+                <button class="icon-btn la-edit-btn" title="Edit" data-employee-id="${item.employee_id || ''}" data-date="${item.date || ''}">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+            </td>
         </tr>
     `).join('');
 
@@ -118,6 +246,7 @@ const buildLoginActivityHTML = (dailySummary = []) => {
                             <th>Check-in Location</th>
                             <th>Check-out Time</th>
                             <th>Check-out Location</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -439,6 +568,7 @@ export const renderLoginSettingsPage = async () => {
         }
 
         attachRowHandlers(accounts);
+        attachLoginActivityHandlers(loginEventsData.daily_summary || []);
     } catch (err) {
         console.error('❌ Error loading login settings:', err);
         const errorContent = `

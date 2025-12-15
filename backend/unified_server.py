@@ -1,7 +1,7 @@
 # unified_server.py - Combined Attendance & Leave Tracker Backend
 from flask import Flask, render_template, request, jsonify ,current_app, redirect
 from flask_cors import CORS
-from datetime import datetime, timedelta,timezone
+from datetime import datetime, timedelta,timezone, date
 from calendar import monthrange
 import random
 import string
@@ -360,6 +360,15 @@ active_sessions = {}
 # Store login events (check-in/out with location) - in production, persist to DB
 login_events = []
 
+LOGIN_ACTIVITY_ENTITY = "crc6f_hr_loginactivitytbs"
+LOGIN_ACTIVITY_PRIMARY_FIELD = "crc6f_hr_loginactivitytbid"
+LA_FIELD_EMPLOYEE_ID = "crc6f_employeeid"
+LA_FIELD_DATE = "crc6f_date"
+LA_FIELD_CHECKIN_LOCATION = "crc6f_checkinlocation"
+LA_FIELD_CHECKIN_TIME = "crc6f_checkintime"
+LA_FIELD_CHECKOUT_LOCATION = "crc6f_checkoutlocation"
+LA_FIELD_CHECKOUT_TIME = "crc6f_checkouttime"
+
 def reverse_geocode_to_city(lat, lng):
     """Convert lat/lng to city/locality using OpenStreetMap Nominatim API."""
     if not lat or not lng:
@@ -431,6 +440,191 @@ def log_login_event(employee_id, event_type, req, location=None, client_time=Non
     print(f"[LOGIN-EVENT] {event_type} for {employee_id} at {now.isoformat()}, city={city_name}")
     return event
 
+def _safe_odata_string(val: str) -> str:
+    return (val or "").replace("'", "''")
+
+def _login_activity_location_string(event: dict):
+    if not event or not isinstance(event, dict):
+        return None
+    city = event.get("city")
+    if isinstance(city, str) and city.strip():
+        return city.strip()
+    lat = event.get("location_lat")
+    lng = event.get("location_lng")
+    if lat is not None and lng is not None:
+        try:
+            return f"{float(lat):.6f},{float(lng):.6f}"
+        except Exception:
+            return f"{lat},{lng}"
+    return None
+
+def _fetch_login_activity_record(token: str, employee_id: str, date_str: str):
+    emp = (employee_id or "").strip().upper()
+    dt = (date_str or "").strip()
+    if not emp or not dt:
+        return None
+    safe_emp = _safe_odata_string(emp)
+    safe_dt = _safe_odata_string(dt)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "OData-MaxVersion": "4.0",
+        "OData-Version": "4.0",
+    }
+    select_fields = ",".join(
+        [
+            LOGIN_ACTIVITY_PRIMARY_FIELD,
+            LA_FIELD_EMPLOYEE_ID,
+            LA_FIELD_DATE,
+            LA_FIELD_CHECKIN_TIME,
+            LA_FIELD_CHECKIN_LOCATION,
+            LA_FIELD_CHECKOUT_TIME,
+            LA_FIELD_CHECKOUT_LOCATION,
+        ]
+    )
+    url = (
+        f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}"
+        f"?$select={select_fields}&$top=1&$filter={LA_FIELD_EMPLOYEE_ID} eq '{safe_emp}' and {LA_FIELD_DATE} eq '{safe_dt}'"
+    )
+    resp = requests.get(url, headers=headers, timeout=20)
+    if resp.status_code == 200:
+        vals = resp.json().get("value", [])
+        return vals[0] if vals else None
+    raise Exception(f"Dataverse fetch failed ({resp.status_code}): {resp.text}")
+
+def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload: dict):
+    emp = (employee_id or "").strip().upper()
+    dt = (date_str or "").strip()
+    if not emp or not dt:
+        return None
+    patch_payload = dict(payload or {})
+    if not patch_payload:
+        return None
+
+    existing = None
+    try:
+        existing = _fetch_login_activity_record(token, emp, dt)
+    except Exception:
+        existing = None
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "OData-MaxVersion": "4.0",
+        "OData-Version": "4.0",
+    }
+
+    if existing and existing.get(LOGIN_ACTIVITY_PRIMARY_FIELD):
+        record_id = str(existing.get(LOGIN_ACTIVITY_PRIMARY_FIELD)).strip("{}")
+        url = f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}({record_id})"
+        patch_headers = {**headers, "If-Match": "*"}
+        r = requests.patch(url, headers=patch_headers, json=patch_payload, timeout=20)
+        if r.status_code in (204, 200):
+            return record_id
+        raise Exception(f"Dataverse update failed ({r.status_code}): {r.text}")
+
+    create_payload = {
+        LA_FIELD_EMPLOYEE_ID: emp,
+        LA_FIELD_DATE: dt,
+        **patch_payload,
+    }
+    create_headers = {**headers, "Prefer": "return=representation"}
+    r = requests.post(f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}", headers=create_headers, json=create_payload, timeout=20)
+    if r.status_code in (200, 201):
+        body = r.json() if r.content else {}
+        rid = body.get(LOGIN_ACTIVITY_PRIMARY_FIELD) or body.get("id")
+        return str(rid).strip("{}") if rid else None
+    raise Exception(f"Dataverse create failed ({r.status_code}): {r.text}")
+
+def _fetch_login_activity_records_range(token: str, from_date: str, to_date: str, employee_id: str = ""):
+    fd = (from_date or "").strip()
+    td = (to_date or "").strip()
+    if not fd or not td:
+        return []
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "OData-MaxVersion": "4.0",
+        "OData-Version": "4.0",
+    }
+    select_fields = ",".join(
+        [
+            LOGIN_ACTIVITY_PRIMARY_FIELD,
+            LA_FIELD_EMPLOYEE_ID,
+            LA_FIELD_DATE,
+            LA_FIELD_CHECKIN_TIME,
+            LA_FIELD_CHECKIN_LOCATION,
+            LA_FIELD_CHECKOUT_TIME,
+            LA_FIELD_CHECKOUT_LOCATION,
+        ]
+    )
+    filter_parts = [
+        f"{LA_FIELD_DATE} ge '{_safe_odata_string(fd)}'",
+        f"{LA_FIELD_DATE} le '{_safe_odata_string(td)}'",
+    ]
+    if employee_id:
+        filter_parts.append(f"{LA_FIELD_EMPLOYEE_ID} eq '{_safe_odata_string(employee_id.strip().upper())}'")
+    filter_query = " and ".join(filter_parts)
+    url = f"{BASE_URL}/{LOGIN_ACTIVITY_ENTITY}?$select={select_fields}&$top=5000&$filter={filter_query}"
+    resp = requests.get(url, headers=headers, timeout=25)
+    if resp.status_code == 200:
+        return resp.json().get("value", [])
+    raise Exception(f"Dataverse range fetch failed ({resp.status_code}): {resp.text}")
+
+def _fetch_all_employee_ids(token: str):
+    entity_set = get_employee_entity_set(token)
+    field_map = get_field_map(entity_set)
+    id_field = field_map.get("id")
+    if not id_field:
+        return []
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "OData-MaxVersion": "4.0",
+        "OData-Version": "4.0",
+    }
+    url = f"{RESOURCE}/api/data/v9.2/{entity_set}?$select={id_field}&$top=5000&$orderby=createdon desc"
+    resp = requests.get(url, headers=headers, timeout=25)
+    if resp.status_code != 200:
+        return []
+    ids = []
+    for r in resp.json().get("value", []):
+        v = r.get(id_field)
+        if v is not None and str(v).strip():
+            ids.append(str(v).strip().upper())
+    return sorted(set(ids))
+
+def _sync_login_activity_from_event(event: dict):
+    try:
+        if not event or not isinstance(event, dict):
+            return
+        emp = (event.get("employee_id") or "").strip().upper()
+        dt = (event.get("date") or "").strip()
+        et = (event.get("event_type") or "").strip().lower()
+        if not emp or not dt or et not in ("check_in", "check_out"):
+            return
+
+        token = get_access_token()
+        existing = None
+        try:
+            existing = _fetch_login_activity_record(token, emp, dt)
+        except Exception:
+            existing = None
+
+        patch = {}
+        if et == "check_in":
+            if existing and existing.get(LA_FIELD_CHECKIN_TIME):
+                return
+            patch[LA_FIELD_CHECKIN_TIME] = event.get("server_time_utc")
+            patch[LA_FIELD_CHECKIN_LOCATION] = _login_activity_location_string(event)
+        else:
+            patch[LA_FIELD_CHECKOUT_TIME] = event.get("server_time_utc")
+            patch[LA_FIELD_CHECKOUT_LOCATION] = _login_activity_location_string(event)
+
+        _upsert_login_activity(token, emp, dt, patch)
+    except Exception as e:
+        print(f"[WARN] Failed to sync login activity: {e}")
 
 # ================== HELPER FUNCTIONS ==================
 def generate_random_attendance_id():
@@ -1528,7 +1722,8 @@ def checkin():
         key = normalized_emp_id
 
         # Log the check-in event with location
-        log_login_event(normalized_emp_id, "check_in", request, location_data, client_time, timezone_str)
+        event = log_login_event(normalized_emp_id, "check_in", request, location_data, client_time, timezone_str)
+        _sync_login_activity_from_event(event)
 
         # If already checked in, return existing active session (idempotent)
         if key in active_sessions:
@@ -2552,7 +2747,8 @@ def checkout():
         key = normalized_emp_id
 
         # Log the check-out event with location
-        log_login_event(normalized_emp_id, "check_out", request, location_data, client_time, timezone_str)
+        event = log_login_event(normalized_emp_id, "check_out", request, location_data, client_time, timezone_str)
+        _sync_login_activity_from_event(event)
 
         session = active_sessions.get(key)
         if not session:
@@ -10647,6 +10843,39 @@ def ai_health():
 
 
 # ================== LOGIN EVENTS (Location Tracking) ==================
+@app.route("/api/login-activity", methods=["PUT"])
+def upsert_login_activity_api():
+    try:
+        data = request.get_json(force=True) or {}
+        employee_id = (data.get("employee_id") or "").strip().upper()
+        date_str = (data.get("date") or "").strip()
+        if not employee_id or not date_str:
+            return jsonify({"success": False, "error": "employee_id and date are required"}), 400
+
+        payload = {}
+        if "check_in_time" in data:
+            payload[LA_FIELD_CHECKIN_TIME] = data.get("check_in_time")
+        if "check_in_location" in data:
+            payload[LA_FIELD_CHECKIN_LOCATION] = data.get("check_in_location")
+        if "check_out_time" in data:
+            payload[LA_FIELD_CHECKOUT_TIME] = data.get("check_out_time")
+        if "check_out_location" in data:
+            payload[LA_FIELD_CHECKOUT_LOCATION] = data.get("check_out_location")
+
+        token = get_access_token()
+        record_id = _upsert_login_activity(token, employee_id, date_str, payload)
+        updated = _fetch_login_activity_record(token, employee_id, date_str)
+
+        return jsonify({
+            "success": True,
+            "record_id": record_id,
+            "record": updated or {},
+        })
+    except Exception as e:
+        print(f"[ERROR] upsert_login_activity_api: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/login-events", methods=["GET"])
 def get_login_events():
     """Get login events (check-in/out with location) for L2/L3 tracking.
@@ -10657,73 +10886,61 @@ def get_login_events():
     - employee_id: filter by specific employee
     """
     try:
-        from_date = request.args.get("from")
-        to_date = request.args.get("to")
+        from_date = (request.args.get("from") or "").strip()
+        to_date = (request.args.get("to") or "").strip()
         employee_id_filter = request.args.get("employee_id", "").strip().upper()
-        
-        filtered = login_events
-        
-        # Filter by employee if specified
+
+        if not from_date or not to_date:
+            today = datetime.now(timezone.utc).date().isoformat()
+            from_date = from_date or today
+            to_date = to_date or today
+
+        token = get_access_token()
+        employee_ids = _fetch_all_employee_ids(token)
         if employee_id_filter:
-            filtered = [e for e in filtered if e.get("employee_id", "").upper() == employee_id_filter]
-        
-        # Filter by date range
-        if from_date:
-            filtered = [e for e in filtered if e.get("date", "") >= from_date]
-        if to_date:
-            filtered = [e for e in filtered if e.get("date", "") <= to_date]
-        
-        # Sort by server_time_utc descending (most recent first)
-        filtered = sorted(filtered, key=lambda x: x.get("server_time_utc", ""), reverse=True)
-        
-        # Group by employee + date for summary view
-        daily_summary = {}
-        for event in filtered:
-            key = f"{event.get('employee_id')}|{event.get('date')}"
-            if key not in daily_summary:
-                daily_summary[key] = {
-                    "employee_id": event.get("employee_id"),
-                    "date": event.get("date"),
-                    "check_in_time": None,
-                    "check_in_location": None,
-                    "check_out_time": None,
-                    "check_out_location": None,
-                    "events": []
-                }
-            
-            summary = daily_summary[key]
-            summary["events"].append(event)
-            
-            if event.get("event_type") == "check_in":
-                # Use the latest check-in for the day
-                if not summary["check_in_time"] or event.get("server_time_utc", "") > summary["check_in_time"]:
-                    summary["check_in_time"] = event.get("server_time_utc")
-                    # Store full location details (city + coords) for transparency
-                    summary["check_in_location"] = {
-                        "city": event.get("city"),
-                        "lat": event.get("location_lat"),
-                        "lng": event.get("location_lng"),
-                        "accuracy_m": event.get("accuracy_m"),
-                        "source": event.get("location_source"),
-                    }
-            elif event.get("event_type") == "check_out":
-                # Use the latest check-out
-                if not summary["check_out_time"] or event.get("server_time_utc", "") > summary["check_out_time"]:
-                    summary["check_out_time"] = event.get("server_time_utc")
-                    # Store full location details (city + coords) for transparency
-                    summary["check_out_location"] = {
-                        "city": event.get("city"),
-                        "lat": event.get("location_lat"),
-                        "lng": event.get("location_lng"),
-                        "accuracy_m": event.get("accuracy_m"),
-                        "source": event.get("location_source"),
-                    }
-        
+            employee_ids = [employee_id_filter]
+
+        records = _fetch_login_activity_records_range(token, from_date, to_date, employee_id_filter)
+        record_map = {}
+        for r in records:
+            emp = (r.get(LA_FIELD_EMPLOYEE_ID) or "").strip().upper()
+            dt = (r.get(LA_FIELD_DATE) or "").strip()
+            if emp and dt:
+                record_map[f"{emp}|{dt}"] = r
+
+        try:
+            d0 = date.fromisoformat(from_date)
+            d1 = date.fromisoformat(to_date)
+        except Exception:
+            return jsonify({"success": False, "error": "Invalid date range. Expected YYYY-MM-DD."}), 400
+
+        if d1 < d0:
+            return jsonify({"success": False, "error": "to must be >= from"}), 400
+
+        dates = []
+        cur = d0
+        while cur <= d1:
+            dates.append(cur.isoformat())
+            cur = cur + timedelta(days=1)
+
+        daily_summary = []
+        for dt in dates:
+            for emp_id in employee_ids:
+                rec = record_map.get(f"{emp_id}|{dt}") or {}
+                daily_summary.append({
+                    "employee_id": emp_id,
+                    "date": dt,
+                    "check_in_time": rec.get(LA_FIELD_CHECKIN_TIME),
+                    "check_in_location": rec.get(LA_FIELD_CHECKIN_LOCATION),
+                    "check_out_time": rec.get(LA_FIELD_CHECKOUT_TIME),
+                    "check_out_location": rec.get(LA_FIELD_CHECKOUT_LOCATION),
+                    "record_id": rec.get(LOGIN_ACTIVITY_PRIMARY_FIELD),
+                })
+
         return jsonify({
             "success": True,
-            "events": filtered,
-            "daily_summary": list(daily_summary.values()),
-            "total": len(filtered)
+            "daily_summary": daily_summary,
+            "total": len(daily_summary),
         })
     except Exception as e:
         print(f"[ERROR] get_login_events: {e}")

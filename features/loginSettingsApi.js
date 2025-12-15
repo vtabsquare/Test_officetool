@@ -67,3 +67,16 @@ export async function fetchLoginEvents(options = {}) {
   }
   return data;
 }
+
+export async function updateLoginActivity(payload) {
+  const res = await fetch(`${BASE_URL}/api/login-activity`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update login activity');
+  }
+  return data;
+}
