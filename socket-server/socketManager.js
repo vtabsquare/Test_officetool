@@ -5,13 +5,27 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
+function resolveSocketUrl() {
+  const envBase =
+    (typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      (import.meta.env.VITE_CHAT_SOCKET_URL ||
+        import.meta.env.VITE_SOCKET_URL)) ||
+    null;
+
+  if (envBase) {
+    return envBase;
+  }
+
+  if (typeof window !== "undefined" && window.SOCKET_BASE_URL) {
+    return String(window.SOCKET_BASE_URL);
+  }
+
+  return "http://localhost:4000";
+}
+
 // Prefer dedicated chat socket URL, fall back to generic or localhost:4000 (same as meet)
-const CHAT_SOCKET_URL =
-  (typeof import.meta !== "undefined" &&
-    import.meta.env &&
-    (import.meta.env.VITE_CHAT_SOCKET_URL ||
-      import.meta.env.VITE_SOCKET_URL)) ||
-  "http://localhost:4000";
+const CHAT_SOCKET_URL = resolveSocketUrl();
 
 export function initSocket() {
   if (socket) return socket;

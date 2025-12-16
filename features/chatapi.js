@@ -4,7 +4,29 @@ import { state } from "../state.js";
 // ----------------------------
 // API BASE (FLASK BLUEPRINT)
 // ----------------------------
-const CHAT_API_BASE = "http://localhost:5000/chat";
+const resolveChatApiBase = () => {
+  const envBase =
+    (typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      (import.meta.env.VITE_CHAT_API_BASE ||
+        import.meta.env.VITE_API_BASE_URL)) ||
+    null;
+
+  if (envBase) {
+    const normalized = envBase.replace(/\/$/, "");
+    return normalized.endsWith("/chat") ? normalized : `${normalized}/chat`;
+  }
+
+  if (typeof window !== "undefined" && window.API_BASE_URL) {
+    const normalized = String(window.API_BASE_URL).replace(/\/$/, "");
+    return `${normalized}/chat`;
+  }
+
+  // Fallback to same-origin /chat to support proxying in prod
+  return "/chat";
+};
+
+const CHAT_API_BASE = resolveChatApiBase();
 
 // ----------------------------
 // INTERNAL FETCH WRAPPER
