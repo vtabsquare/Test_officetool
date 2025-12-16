@@ -589,9 +589,54 @@ export const renderChatPage = async () => {
     .msg-content{ display:block; }
 
     .msg-ticks{
-      font-size:12px;
-      margin-left:8px;
+      font-size:11px;
+      margin-left:6px;
       color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+    }
+
+    /* Message meta row - time and ticks */
+    .msg-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* 3-dot options button in message bubble */
+    .msg-options-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.15s ease, background 0.15s ease;
+      font-size: 12px;
+    }
+
+    .chat-msg:hover .msg-options-btn {
+      opacity: 1;
+    }
+
+    .msg-options-btn:hover {
+      background: rgba(0,0,0,0.1);
+    }
+
+    .dark-mode .msg-options-btn:hover,
+    [data-theme='dark'] .msg-options-btn:hover {
+      background: rgba(255,255,255,0.1);
     }
 
     /* header search + input area */
@@ -790,7 +835,7 @@ export const renderChatPage = async () => {
       flex-direction: column;
       gap: 16px;
       padding: 8px 0;
-      min-height: 400px;
+      height: 450px;
     }
 
     .new-chat-search {
@@ -818,11 +863,102 @@ export const renderChatPage = async () => {
     }
 
     .new-chat-list {
-      max-height: 320px;
+      max-height: 280px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 4px;
+      margin-bottom: 16px;
+    }
+
+    /* Forward Modal - WhatsApp Style */
+    .forward-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .forward-search i {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .forward-search input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .forward-list {
+      max-height: 350px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .forward-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .forward-item:hover {
+      background: var(--hover);
+    }
+
+    .forward-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .forward-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .forward-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .forward-type {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .forward-check {
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .forward-item:hover .forward-check {
+      color: var(--primary);
     }
 
     .new-chat-row {
@@ -3818,7 +3954,7 @@ body.dark .msg-time {
     setTimeout(() => toast.remove(), 2000);
   }
 
-  // Forward message modal
+  // Forward message modal - WhatsApp style
   function openForwardModal(messageObj) {
     const conversations = window.conversationCache || [];
     if (!conversations.length) {
@@ -3826,23 +3962,44 @@ body.dark .msg-time {
       return;
     }
 
+    const myId = state.user?.id;
     let listHtml = conversations.map(c => {
       const name = getTargetDisplayName(c) || c.display_name || c.name || "Chat";
+      const initials = getInitials(name);
+      const isGroup = c.is_group;
       return `<div class="forward-item" data-convo="${c.conversation_id}">
-        <span>${escapeHtml(name)}</span>
+        <div class="forward-avatar">${initials}</div>
+        <div class="forward-info">
+          <div class="forward-name">${escapeHtml(name)}</div>
+          <div class="forward-type">${isGroup ? 'Group' : 'Direct'}</div>
+        </div>
+        <div class="forward-check"><i class="fa-regular fa-circle"></i></div>
       </div>`;
     }).join("");
 
     renderModal("Forward to", `
-      <div class="forward-list" style="max-height:300px;overflow-y:auto;">
+      <div class="forward-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="forwardSearchInput" placeholder="Search conversations..." />
+      </div>
+      <div class="forward-list">
         ${listHtml}
       </div>
     `, null);
 
+    // Search filter
+    const searchInput = document.getElementById("forwardSearchInput");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        const q = e.target.value.toLowerCase();
+        document.querySelectorAll(".forward-item").forEach(item => {
+          const name = item.querySelector(".forward-name")?.textContent?.toLowerCase() || "";
+          item.style.display = name.includes(q) ? "flex" : "none";
+        });
+      });
+    }
+
     document.querySelectorAll(".forward-item").forEach(item => {
-      item.style.cssText = "padding:12px;cursor:pointer;border-radius:8px;";
-      item.onmouseenter = () => item.style.background = "var(--hover)";
-      item.onmouseleave = () => item.style.background = "transparent";
       item.onclick = async () => {
         const targetConvoId = item.dataset.convo;
         // Forward the message
@@ -4528,10 +4685,16 @@ body.dark .msg-time {
     const status = msg.status || "sent";
     let html = `<span class="msg-ticks">`;
 
-    if (status === "sent") html += "✓";
-    else if (status === "delivered") html += "✓✓";
-    else if (status === "seen")
-      html += `<span style="color:#3b82f6;">✓✓</span>`;
+    if (status === "sent") {
+      // Single grey tick - message sent
+      html += `<i class="fa-solid fa-check" style="color:#8696a0;"></i>`;
+    } else if (status === "delivered") {
+      // Double grey ticks - message delivered
+      html += `<span style="color:#8696a0;"><i class="fa-solid fa-check-double"></i></span>`;
+    } else if (status === "seen" || status === "read") {
+      // Double blue ticks - message seen
+      html += `<span style="color:#53bdeb;"><i class="fa-solid fa-check-double"></i></span>`;
+    }
 
     html += `</span>`;
     return html;
