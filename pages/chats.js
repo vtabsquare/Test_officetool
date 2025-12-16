@@ -290,15 +290,14 @@ export const renderChatPage = async () => {
       width:44px;
       height:44px;
       border-radius: 50%;
-      background: linear-gradient(180deg, var(--primary), var(--accent));
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Soft purple-blue gradient */
       color:white;
       display:flex;
       align-items:center;
       justify-content:center;
-      font-weight:800;
+      font-weight:700;
       font-size:14px;
       flex-shrink:0;
-      box-shadow: 0 8px 20px rgba(91,61,245,0.20);
     }
 
     .chat-item .chat-meta{
@@ -315,6 +314,38 @@ export const renderChatPage = async () => {
       display:flex;
       justify-content:space-between;
       align-items:center;
+      gap: 8px;
+    }
+
+    .chat-item .chat-item-time {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    .chat-item .chat-item-options {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      margin-left: 4px;
+    }
+
+    .chat-item:hover .chat-item-options {
+      opacity: 1;
+    }
+
+    .chat-item .chat-item-options button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .chat-item .chat-item-options button:hover {
+      background: var(--hover);
+      color: var(--text);
     }
 
     .chat-item .chat-item-last{
@@ -325,6 +356,68 @@ export const renderChatPage = async () => {
       overflow:hidden;
       text-overflow:ellipsis;
       max-width:170px;
+    }
+
+    /* Chat item name row with time */
+    .chat-item .chat-item-name-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-item .chat-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .chat-item .chat-time {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .chat-item .chat-item-preview {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .chat-item .chat-item-more {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.15s ease, background 0.15s ease;
+    }
+
+    .chat-item:hover .chat-item-more {
+      opacity: 1;
+    }
+
+    .chat-item .chat-item-more:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .chat-item {
+      position: relative;
     }
 
     .notification-badge{
@@ -442,6 +535,8 @@ export const renderChatPage = async () => {
       overflow:auto;
       padding: 18px;
       background: var(--bg);
+      display: flex;
+      flex-direction: column;
     }
 
     .chat-placeholder{
@@ -451,32 +546,44 @@ export const renderChatPage = async () => {
     }
 
     .chat-msg{
-      display:inline-flex;
+      display: flex;
       flex-direction: column;
-      padding: 12px 14px;
-      border-radius: 18px;
-      margin: 8px 0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin: 4px 0;
       word-wrap:break-word;
-      max-width: 70%;
+      max-width: 65%;
       width: fit-content;
       font-size:14px;
-      line-height:1.35;
-      box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
+      line-height:1.4;
+      position: relative;
     }
 
     .msg-sent{
-      margin-left:auto;
-      background: var(--bubble-out);
-      color: var(--text);
-      border-bottom-right-radius: 4px;
+      margin-left: auto;
+      background: #dcf8c6; /* WhatsApp light green */
+      color: #111b21;
+      border-top-right-radius: 0;
       box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);
     }
 
     .msg-received{
-      background: var(--bubble-in);
-      color: var(--text);
-      border-bottom-left-radius: 4px;
+      margin-right: auto;
+      background: #ffffff;
+      color: #111b21;
+      border-top-left-radius: 0;
       box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);
+    }
+
+    /* Dark mode bubbles */
+    .dark-mode .msg-sent, [data-theme='dark'] .msg-sent {
+      background: #005c4b;
+      color: #e9edef;
+    }
+
+    .dark-mode .msg-received, [data-theme='dark'] .msg-received {
+      background: #202c33;
+      color: #e9edef;
     }
 
     .msg-content{ display:block; }
@@ -606,6 +713,48 @@ export const renderChatPage = async () => {
       background: linear-gradient(90deg, rgba(91,61,245,0.08), rgba(107,70,255,0.04));
     }
 
+    /* Floating chat item menu */
+    .floating-chat-item-menu {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      overflow: hidden;
+      min-width: 160px;
+    }
+
+    .floating-chat-item-menu button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.12s ease;
+    }
+
+    .floating-chat-item-menu button:hover {
+      background: var(--hover);
+    }
+
+    .floating-chat-item-menu button i {
+      width: 16px;
+      color: var(--muted);
+    }
+
+    .floating-chat-item-menu .menu-delete {
+      color: #ef4444;
+    }
+
+    .floating-chat-item-menu .menu-delete i {
+      color: #ef4444;
+    }
+
     /* floating menus (message actions / chat options) */
     #messageMenu,
     #chatOptionsMenu {
@@ -641,6 +790,7 @@ export const renderChatPage = async () => {
       flex-direction: column;
       gap: 16px;
       padding: 8px 0;
+      min-height: 400px;
     }
 
     .new-chat-search {
@@ -709,8 +859,9 @@ export const renderChatPage = async () => {
     .new-chat-actions {
       display: flex;
       gap: 12px;
-      padding-top: 8px;
+      padding: 16px 0 8px;
       border-top: 1px solid var(--border);
+      margin-top: auto;
     }
 
     .btn-chat-action {
@@ -734,10 +885,13 @@ export const renderChatPage = async () => {
     }
 
     .btn-chat-action.btn-primary {
-      background: linear-gradient(180deg, var(--primary), var(--accent));
+      background: var(--primary);
       border: none;
       color: white;
-      box-shadow: 0 8px 20px rgba(91, 61, 245, 0.20);
+    }
+
+    .btn-chat-action.btn-primary:hover {
+      background: var(--accent);
     }
 
     .btn-chat-action:disabled {
@@ -1973,8 +2127,8 @@ body.dark .msg-time {
       </div>
 
       <div class="chat-left-tabs">
-        <button class="chat-tab active" type="button">General</button>
-        <button class="chat-tab" type="button">Archive</button>
+        <button class="chat-tab active" type="button" data-tab="general">General</button>
+        <button class="chat-tab" type="button" data-tab="archive">Archive</button>
       </div>
 
       <div class="chat-search" style="padding:0 16px 14px;">
@@ -2492,6 +2646,15 @@ body.dark .msg-time {
     renderConversationList(q);
   });
 
+  // Tab switching (General / Archive)
+  document.querySelectorAll(".chat-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".chat-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      renderConversationList();
+    });
+  });
+
   // media menu
   // --- WhatsApp Style Toggle Media Menu ---
   const mediaBtn = document.getElementById("mediaMenuBtn");
@@ -2577,6 +2740,17 @@ body.dark .msg-time {
       window.chatCache[window.currentConversationId] = [];
     }
     window.chatCache[window.currentConversationId].push(payload);
+
+    // 3️⃣ Update conversation's last_message_time to move it to top
+    const convo = (window.conversationCache || []).find(
+      c => c.conversation_id === window.currentConversationId
+    );
+    if (convo) {
+      convo.last_message_time = payload.created_on;
+      convo.last_message = payload.message_text || payload.file_name || "";
+      convo.last_sender = payload.sender_id;
+      renderConversationList(); // Re-render to move chat to top
+    }
 
     emit("send_message", payload, (err, res) => {
       if (err) {
@@ -3196,7 +3370,7 @@ body.dark .msg-time {
       } else {
         // Use the correct file download endpoint
         const apiBase = window.API_BASE_URL || '';
-        FILE_URL = `${apiBase}/chat/file/${mu}`;
+        FILE_URL = `${apiBase}/chat/file-download/${mu}`;
       }
     }
 
@@ -3366,7 +3540,7 @@ body.dark .msg-time {
     // Build final URL (server.media_url should be id or full path)
     const mediaId = server.media_url || server.mediaId || "";
     const apiBase = window.API_BASE_URL || '';
-    const url = mediaId ? `${apiBase}/chat/file/${mediaId}` : "";
+    const url = mediaId ? `${apiBase}/chat/file-download/${mediaId}` : "";
     const mime = (server.mime_type || server.mime || "").toLowerCase();
 
     // find content container inside bubble
@@ -4631,11 +4805,23 @@ body.dark .msg-time {
     container.innerHTML = "";
 
     const myId = state.user?.id;
+    
+    // Get archived chats from localStorage
+    const archivedChats = JSON.parse(localStorage.getItem("archivedChats") || "[]");
+    
+    // Check which tab is active (General or Archive)
+    const archiveTab = document.querySelector('.chat-tab[data-tab="archive"]');
+    const showArchived = archiveTab?.classList.contains('active') || false;
 
     // Filter conversations
     let list = (window.conversationCache || []).filter((c) => {
       const name = getTargetDisplayName(c) || c.display_name || c.name || "";
       const last = c.last_message || "";
+      const isArchived = archivedChats.includes(c.conversation_id);
+      
+      // Filter by archive status
+      if (showArchived && !isArchived) return false;
+      if (!showArchived && isArchived) return false;
 
       if (!filter) return true;
 
@@ -4849,9 +5035,8 @@ body.dark .msg-time {
     }
   };
   function openChatItemMenu(conversationId, ev) {
-    // simple floating menu with actions (delete/edit/rename)
-    // build menu or reuse existing chatOptionsMenu DOM if you have one
-    closeAllFloatingMenus(); // implement small helper to hide existing menus
+    // simple floating menu with actions (delete/edit/rename/archive)
+    closeAllFloatingMenus();
     const menu = document.createElement("div");
     menu.className = "floating-chat-item-menu";
     menu.style.position = "absolute";
@@ -4859,10 +5044,30 @@ body.dark .msg-time {
     menu.style.top = ev.pageY + "px";
     menu.style.zIndex = 9999;
     menu.innerHTML = `
-    <button class="menu-edit" data-convo="${conversationId}">Edit name</button>
-    <button class="menu-delete" data-convo="${conversationId}">Delete chat</button>
+    <button class="menu-edit" data-convo="${conversationId}"><i class="fa-solid fa-pen"></i> Edit name</button>
+    <button class="menu-archive" data-convo="${conversationId}"><i class="fa-solid fa-box-archive"></i> Archive</button>
+    <button class="menu-delete" data-convo="${conversationId}"><i class="fa-solid fa-trash"></i> Delete chat</button>
   `;
     document.body.appendChild(menu);
+
+    // Archive handler
+    menu.querySelector(".menu-archive").addEventListener("click", async () => {
+      const convo = (window.conversationList || []).find(
+        (c) => c.conversation_id === conversationId
+      );
+      if (!convo) return;
+
+      // Mark as archived (store in localStorage for now)
+      const archivedChats = JSON.parse(localStorage.getItem("archivedChats") || "[]");
+      if (!archivedChats.includes(conversationId)) {
+        archivedChats.push(conversationId);
+        localStorage.setItem("archivedChats", JSON.stringify(archivedChats));
+      }
+      
+      await refreshConversationList();
+      closeAllFloatingMenus();
+      showToast("Chat archived");
+    });
 
     // handlers
     menu.querySelector(".menu-edit").addEventListener("click", async () => {
