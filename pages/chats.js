@@ -20,6 +20,8 @@ import {
   updateGroupDescription,
   updateGroupIcon,
   leaveDirectChat,
+  editMessageApi,
+  deleteMessageApi,
   sendWithProgress,
   sendMultipleFilesApi,
   markMessagesRead,
@@ -50,6 +52,48 @@ window.groupMemberCache = {}; // { conversationId: [members] }
 window.currentConversationId = null;
 let typingTimer = null;
 let isTyping = false;
+
+function getChatSearchFilter() {
+  return (document.getElementById("chatSearchInput")?.value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function setGroupComposerDisabled(disabled, reasonText = "") {
+  const input = document.getElementById("chatMessageInput");
+  const sendBtn = document.getElementById("sendMessageBtn");
+  const mediaBtn = document.getElementById("mediaMenuBtn");
+
+  if (input) {
+    input.disabled = !!disabled;
+    input.placeholder = disabled
+      ? (reasonText || "You're no longer a participant")
+      : "Type a message";
+  }
+  if (sendBtn) sendBtn.disabled = !!disabled;
+  if (mediaBtn) {
+    mediaBtn.style.pointerEvents = disabled ? "none" : "auto";
+    mediaBtn.style.opacity = disabled ? "0.55" : "1";
+  }
+}
+
+function updateGroupHeaderSubFromConvo(conversation_id) {
+  const convo = (window.conversationCache || []).find(
+    (c) => String(c.conversation_id) === String(conversation_id)
+  );
+  if (!convo?.is_group) return;
+  const headerSub = document.getElementById("chatHeaderSub");
+  if (!headerSub) return;
+
+  const me = String(state.user?.id || "");
+  const names = (convo.members || [])
+    .filter((m) => String(m.id) !== me)
+    .map((m) => m.name)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .join(", ");
+  headerSub.innerText = names || "No members";
+}
 
 // Reply-to state
 window.replyToMessage = null; // { message_id, sender_name, message_text }
@@ -2680,7 +2724,7 @@ body.dark .msg-time {
       delete window.groupMemberCache[data.conversation_id];
       await refreshConversationList();
 
-      const updated = window.conversationList.find(
+      const updated = (window.conversationCache || []).find(
         (c) => String(c.conversation_id) === String(data.conversation_id)
       );
 
@@ -2697,6 +2741,7 @@ body.dark .msg-time {
       // ✅ ✅ ✅ INSTANTLY REFRESH GROUP INFO PANEL
       if (window.currentConversationId === data.conversation_id) {
         openGroupInfoPanel(data.conversation_id);
+        updateGroupHeaderSubFromConvo(data.conversation_id);
       }
     });
 
@@ -2706,7 +2751,7 @@ body.dark .msg-time {
 
       await refreshConversationList();
 
-      const updated = window.conversationList.find(
+      const updated = (window.conversationCache || []).find(
         (c) => String(c.conversation_id) === String(data.conversation_id)
       );
 
@@ -2720,37 +2765,19 @@ body.dark .msg-time {
         addSystemMessageToChat(data.text);
       }
 
-      // ✅ ✅ ✅ INSTANTLY REFRESH GROUP INFO PANEL
+      // ✅ ✅ ✅ INSTANTLY REFRESH GROUP INFO PANEL + HEADER SUBTITLE
       if (window.currentConversationId === data.conversation_id) {
         openGroupInfoPanel(data.conversation_id);
+        updateGroupHeaderSubFromConvo(data.conversation_id);
       }
-    });
 
-    on("group_renamed", (data) => {
-      const convo = window.conversationList.find(
-        (c) => c.conversation_id === data.conversation_id
-      );
-      if (!convo) return;
-
-      convo.name = data.new_name;
-      convo.display_name = data.new_name;
-
-      renderConversationList();
-      if (window.currentConversationId === data.conversation_id) {
-        document.getElementById("chatUserName").innerText = data.new_name;
-      }
-    });
-    on("conversation_deleted", (data) => {
-      window.conversationList = window.conversationList.filter(
-        (c) => c.conversation_id !== data.conversation_id
-      );
-
-      renderConversationList();
-
-      if (window.currentConversationId === data.conversation_id) {
-        document.getElementById(
-          "chatMessages"
-        ).innerHTML = `<div class="chat-placeholder">This group was deleted</div>`;
+      // If I got removed, disable composer
+      const removedList = data.removed || data.members || [];
+      if (
+        String(window.currentConversationId) === String(data.conversation_id) &&
+        removedList.map(String).includes(String(state.user?.id))
+      ) {
+        setGroupComposerDisabled(true, "You're no longer a participant");
       }
     });
     on("user_left_conversation", (data) => {
@@ -2900,6 +2927,7 @@ body.dark .msg-time {
   // send message: optimistic — emits to socket-server which persists via Python
   document.getElementById("sendMessageBtn").onclick = () => {
     const input = document.getElementById("chatMessageInput");
+    if (input?.disabled) return;
     const text = input.value.trim();
     if (!text || !window.currentConversationId) {
       input.value = "";
@@ -4380,6 +4408,15 @@ body.dark .msg-time {
   });
 
   on("message_deleted", (data) => {
+    // Prefer explicit conversation_id so we can update cache even if chat isn't open
+    const cid = data?.conversation_id || window.currentConversationId;
+    if (cid && window.chatCache && Array.isArray(window.chatCache[cid])) {
+      window.chatCache[cid] = window.chatCache[cid].map((m) =>
+        m.message_id === data.message_id ? { ...m, message_text: "[deleted]" } : m
+      );
+    }
+
+    // Update UI only if the message is currently rendered
     markMessageDeleted(data.message_id);
   });
 
@@ -4977,19 +5014,7 @@ body.dark .msg-time {
       const newText = prompt("Edit message:", oldText);
       if (newText === null) return;
 
-      const res = await fetch(
-        `http://localhost:5000/chat/messages/${encodeURIComponent(msgId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ new_text: newText }),
-        }
-      );
-
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || "Edit failed");
-      }
+      await editMessageApi(msgId, newText);
 
       // // update UI
       // const contentEl = msgEl.querySelector(".msg-content");
@@ -5036,53 +5061,9 @@ body.dark .msg-time {
     }
 
     try {
-      const res = await fetch(
-        `http://localhost:5000/chat/messages/${encodeURIComponent(msgId)}`,
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      // parse body
-      const text = await res.text().catch(() => "");
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        data = text;
-      }
-
-      if (!res.ok) {
-        // show helpful error
-        throw new Error(typeof data === "string" ? data : JSON.stringify(data));
-      }
-
-      // success → update UI
-      const msgEl = document.querySelector(`[data-msgid="${msgId}"]`);
-      if (msgEl) {
-        // keep structure but mark deleted
-        const contentEl = msgEl.querySelector(".msg-content");
-        if (contentEl) {
-          contentEl.innerText = "[deleted]";
-          contentEl.classList.add("deleted");
-        } else {
-          // fallback: replace innerHTML
-          msgEl.innerHTML = `<div class="msg-deleted">[deleted]</div>`;
-        }
-      }
-
-      // remove from chatCache
-      const convId = window.currentConversationId;
-      if (
-        convId &&
-        window.chatCache &&
-        Array.isArray(window.chatCache[convId])
-      ) {
-        window.chatCache[convId] = window.chatCache[convId].map((m) =>
-          m.message_id === msgId ? { ...m, message_text: "[deleted]" } : m
-        );
-      }
+      await deleteMessageApi(msgId);
+      // socket will update for everyone; fallback update immediately
+      markMessageDeleted(msgId);
     } catch (err) {
       console.error("Delete failed:", err);
       alert("Delete failed: " + (err.message || JSON.stringify(err)));
@@ -5105,7 +5086,20 @@ body.dark .msg-time {
   function markMessageDeleted(messageId) {
     const el = document.querySelector(`[data-msgid="${messageId}"]`);
     if (!el) return;
-    el.innerHTML = `<div style="font-style:italic;color:var(--muted)">This message was deleted</div>`;
+    const contentEl = el.querySelector(".msg-content");
+    if (contentEl) {
+      contentEl.textContent = "[deleted]";
+      contentEl.classList.add("deleted");
+    } else {
+      el.innerHTML = `<div class="msg-deleted">[deleted]</div>`;
+    }
+
+    const convId = window.currentConversationId;
+    if (convId && window.chatCache && Array.isArray(window.chatCache[convId])) {
+      window.chatCache[convId] = window.chatCache[convId].map((m) =>
+        m.message_id === messageId ? { ...m, message_text: "[deleted]" } : m
+      );
+    }
   }
 
   // Typing indicator with auto-hide after 4 seconds (safety net)
@@ -5243,6 +5237,9 @@ body.dark .msg-time {
     container.innerHTML = "";
 
     const myId = state.user?.id;
+
+    // Per-user hidden chats ("Delete group" for removed users)
+    const hiddenChats = JSON.parse(localStorage.getItem("hiddenChats") || "[]");
     
     // Get archived chats from localStorage
     const archivedChats = JSON.parse(localStorage.getItem("archivedChats") || "[]");
@@ -5253,6 +5250,7 @@ body.dark .msg-time {
 
     // Filter conversations
     let list = (window.conversationCache || []).filter((c) => {
+      if (hiddenChats.includes(c.conversation_id)) return false;
       const name = getTargetDisplayName(c) || c.display_name || c.name || "";
       const last = c.last_message || "";
       const isArchived = archivedChats.includes(c.conversation_id);
@@ -5417,6 +5415,15 @@ body.dark .msg-time {
         (c) => c.conversation_id === conversation_id
       ) || {};
 
+    // Disable composer if I am not a member of this group anymore
+    if (convo.is_group) {
+      const me = String(state.user?.id || "");
+      const isMember = (convo.members || []).some((m) => String(m.id) === me);
+      setGroupComposerDisabled(!isMember, !isMember ? "You're no longer a participant" : "");
+    } else {
+      setGroupComposerDisabled(false);
+    }
+
     // Clear unread count when opening conversation
     if (convo.unread_count > 0) {
       convo.unread_count = 0;
@@ -5451,6 +5458,8 @@ body.dark .msg-time {
       const names = (convo.members || [])
         .filter((m) => String(m.id) !== me)
         .map((m) => m.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b))
         .join(", ");
 
       headerSub.innerText = names || "No members";
@@ -6596,6 +6605,7 @@ async function openGroupInfoPanel(conversation_id) {
   const myRow = (members || []).find((m) => String(m.id) === me) || {};
   const isMeAdmin = Boolean(myRow.is_admin);
   const isMuted = Boolean(myRow.is_muted);
+  const isMeMember = (members || []).some((m) => String(m.id) === me);
 
   const groupName = convo.display_name || convo.name || "Group";
   const groupInitial = (groupName[0] || "G").toUpperCase();
@@ -6713,10 +6723,17 @@ async function openGroupInfoPanel(conversation_id) {
       </div>
 
       <!-- Exit group -->
+      ${isMeMember ? `
       <div class="group-info-action-row red" id="exitGroupRow">
         <i class="fa-solid fa-arrow-right-from-bracket"></i>
         <span>Exit group</span>
       </div>
+      ` : `
+      <div class="group-info-action-row red" id="deleteGroupRow">
+        <i class="fa-solid fa-trash"></i>
+        <span>Delete group</span>
+      </div>
+      `}
     </div>
   `;
   document.body.appendChild(panel);
@@ -6786,19 +6803,48 @@ async function openGroupInfoPanel(conversation_id) {
   };
 
   // Exit group
-  document.getElementById("exitGroupRow").onclick = async () => {
-    if (!confirm("Exit this group?")) return;
-    try {
-      await leaveGroup(conversation_id);
+  const exitEl = document.getElementById("exitGroupRow");
+  if (exitEl) {
+    exitEl.onclick = async () => {
+      if (!confirm("Exit this group?")) return;
+      try {
+        await leaveGroup(conversation_id);
+        closePanel();
+        if (typeof window.refreshConversationList === "function") {
+          await window.refreshConversationList();
+        }
+      } catch (err) {
+        console.error("leaveGroup failed:", err);
+        alert("Failed to leave group");
+      }
+    };
+  }
+
+  // Delete group (removed users only) - hides from this user's feed
+  const delEl = document.getElementById("deleteGroupRow");
+  if (delEl) {
+    delEl.onclick = async () => {
+      if (!confirm("Remove this group from your chat list?")) return;
+      const hiddenChats = JSON.parse(localStorage.getItem("hiddenChats") || "[]");
+      if (!hiddenChats.includes(conversation_id)) {
+        hiddenChats.push(conversation_id);
+        localStorage.setItem("hiddenChats", JSON.stringify(hiddenChats));
+      }
       closePanel();
       if (typeof window.refreshConversationList === "function") {
         await window.refreshConversationList();
+      } else {
+        renderConversationList(getChatSearchFilter());
       }
-    } catch (err) {
-      console.error("leaveGroup failed:", err);
-      alert("Failed to leave group");
-    }
-  };
+      if (String(window.currentConversationId) === String(conversation_id)) {
+        setGroupComposerDisabled(true, "You're no longer a participant");
+        const chatBox = document.getElementById("chatMessages");
+        if (chatBox) {
+          chatBox.innerHTML = `<div class="chat-placeholder">You're no longer a participant</div>`;
+        }
+      }
+    };
+  }
 
   // Add member (admin only)
   const addMemberRow = document.getElementById("addMemberRow");

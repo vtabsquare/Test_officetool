@@ -618,6 +618,17 @@ def send_text():
 
     message_id = data.get("message_id") or str(uuid.uuid4())
 
+    # ✅ Block non-members from sending (handles removed users)
+    conv_id = data.get("conversation_id")
+    sender_id = data.get("sender_id")
+    try:
+        mq = f"$filter=crc6f_conversation_id eq '{conv_id}' and crc6f_user_id eq '{sender_id}'&$top=1"
+        mresp = dataverse_get(MEMBERS_ENTITY_SET, mq).get("value", []) if conv_id and sender_id else []
+        if not mresp:
+            return jsonify({"error": "forbidden", "details": "not_a_member"}), 403
+    except Exception:
+        return jsonify({"error": "membership_check_failed"}), 500
+
     payload = {
         "crc6f_message_id": message_id,
         "crc6f_conversation_id": data.get("conversation_id"),
@@ -671,6 +682,15 @@ def send_files():
 
         if not conversation_id or not sender_id or not files:
             return jsonify({"error": "conversation_id, sender_id, files required"}), 400
+
+        # ✅ Block non-members from sending (handles removed users)
+        try:
+            mq = f"$filter=crc6f_conversation_id eq '{conversation_id}' and crc6f_user_id eq '{sender_id}'&$top=1"
+            mresp = dataverse_get(MEMBERS_ENTITY_SET, mq).get("value", [])
+            if not mresp:
+                return jsonify({"error": "forbidden", "details": "not_a_member"}), 403
+        except Exception:
+            return jsonify({"error": "membership_check_failed"}), 500
 
         attachments = []
 
@@ -1436,7 +1456,8 @@ def delete_message(message_id):
         except Exception:
                 pass
         emit_socket_event("message_deleted", {
-            "message_id": message_id
+            "message_id": message_id,
+            "conversation_id": conv_id
         })
 
         return jsonify({"ok": True, "message_id": message_id})
