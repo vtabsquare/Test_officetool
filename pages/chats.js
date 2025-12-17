@@ -293,10 +293,17 @@ export const renderChatPage = async () => {
       display:flex;
       align-items:center;
       gap:10px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+
+    .chat-search .chat-search-box:focus-within{
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(0,168,132,0.35);
+      box-shadow: 0 0 0 3px rgba(0,168,132,0.12);
     }
 
     .chat-search .chat-search-box i{
@@ -312,6 +319,11 @@ export const renderChatPage = async () => {
       outline:none;
       font-size:13px;
       box-sizing:border-box;
+    }
+
+    .chat-search input::placeholder{
+      color: var(--muted);
+      opacity: 0.9;
     }
 
     .chat-list{
@@ -5563,7 +5575,6 @@ body.dark .msg-time {
     menu.style.top = ev.pageY + "px";
     menu.style.zIndex = 9999;
     menu.innerHTML = `
-    <button class="menu-edit" data-convo="${conversationId}"><i class="fa-solid fa-pen"></i> Edit name</button>
     <button class="menu-archive" data-convo="${conversationId}"><i class="fa-solid fa-box-archive"></i> Archive</button>
     <button class="menu-delete" data-convo="${conversationId}"><i class="fa-solid fa-trash"></i> Delete chat</button>
   `;
@@ -5589,31 +5600,6 @@ body.dark .msg-time {
     });
 
     // handlers
-    menu.querySelector(".menu-edit").addEventListener("click", async () => {
-      const convo = (window.conversationCache || []).find(
-        (c) => c.conversation_id === conversationId
-      );
-      if (!convo) return;
-
-      if (!convo.is_group) {
-        alert("Only group chats can be renamed");
-        return;
-      }
-
-      const newName = prompt("Rename group to:", convo.name || "");
-      if (!newName) return;
-
-      try {
-        await renameGroup(conversationId, newName);
-        await refreshConversationList();
-      } catch (err) {
-        console.error(err);
-        alert("Rename failed");
-      }
-
-      closeAllFloatingMenus();
-    });
-
     menu.querySelector(".menu-delete").addEventListener("click", async () => {
       const convo = (window.conversationCache || []).find(
         (c) => c.conversation_id === conversationId
