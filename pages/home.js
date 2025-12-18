@@ -5,6 +5,7 @@ import { listEmployees } from '../features/employeeApi.js';
 import { getHolidays } from '../features/holidaysApi.js';
 import { fetchMonthlyAttendance } from '../features/attendanceApi.js';
 import { state } from '../state.js';
+import { cachedFetch, TTL, getPageState, cachePageState } from '../features/cache.js';
 
 const isAdminUser = () => {
     const empId = String(state.user?.id || '').trim().toUpperCase();
@@ -654,24 +655,58 @@ const loadDashboardData = async () => {
     const currentMonth = today.getMonth() + 1;
     const employeeId = String(user.id || '').toUpperCase();
 
-    const [employeesResponse, holidays, attendanceRecords, pendingLeaves] = await Promise.all([
-        // Smaller page size to reduce payload; cache will keep it warm
-        listEmployees(1, 200).catch(err => {
-            console.warn('⚠️ Failed to fetch employees:', err);
-            return { items: [] };
-        }),
-        getHolidays().catch(err => {
-            console.warn('⚠️ Failed to fetch holidays:', err);
-            return [];
-        }),
-        employeeId ? fetchMonthlyAttendance(employeeId, currentYear, currentMonth).catch(err => {
-            console.warn('⚠️ Failed to fetch attendance:', err);
-            return [];
-        }) : Promise.resolve([]),
-        isAdminUser() ? fetchPendingLeaves().catch(err => {
-            console.warn('⚠️ Failed to fetch pending leaves:', err);
-            return [];
-        }) : Promise.resolve([])
+    // Use cached fetch for all API calls - dramatically reduces load time on re-navigation
+    const [employeesResponse, holidays, attendanceRecords, pendingLeaves, peopleOnLeaveData] = await Promise.all([
+        // Employees - cache for 5 minutes (rarely changes)
+        cachedFetch('employees_list', async () => {
+            try {
+                return await listEmployees(1, 200);
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch employees:', err);
+                return { items: [] };
+            }
+        }, TTL.LONG),
+
+        // Holidays - cache for 15 minutes (very stable data)
+        cachedFetch('holidays', async () => {
+            try {
+                return await getHolidays();
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch holidays:', err);
+                return [];
+            }
+        }, TTL.VERY_LONG),
+
+        // Attendance - cache for 1 minute (changes during the day)
+        employeeId ? cachedFetch(`attendance_${employeeId}_${currentYear}_${currentMonth}`, async () => {
+            try {
+                return await fetchMonthlyAttendance(employeeId, currentYear, currentMonth);
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch attendance:', err);
+                return [];
+            }
+        }, TTL.MEDIUM) : Promise.resolve([]),
+
+        // Pending leaves - cache for 30 seconds (admin needs fresh data)
+        isAdminUser() ? cachedFetch('pending_leaves', async () => {
+            try {
+                return await fetchPendingLeaves();
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch pending leaves:', err);
+                return [];
+            }
+        }, TTL.SHORT) : Promise.resolve([]),
+
+        // People on leave - fetch in parallel now (was sequential before)
+        cachedFetch('people_on_leave', async () => {
+            try {
+                const empResp = await cachedFetch('employees_list', () => listEmployees(1, 200), TTL.LONG);
+                return await fetchPeopleOnLeave(empResp?.items || []);
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch people on leave:', err);
+                return [];
+            }
+        }, TTL.MEDIUM)
     ]);
 
     const employees = employeesResponse?.items || [];
@@ -680,7 +715,6 @@ const loadDashboardData = async () => {
     const departmentSnapshot = getDepartmentSnapshot(employees);
     const attendanceSummary = buildAttendanceSummary(attendanceRecords);
     const workProgress = buildWorkProgressSeries(attendanceRecords, today);
-    const peopleOnLeave = await fetchPeopleOnLeave(employees);
     const birthdays = getUpcomingBirthdays(employees);
     const currentEmployee = employees.find(emp =>
         String(emp.employee_id || emp.id || '').toUpperCase() === employeeId
@@ -693,7 +727,7 @@ const loadDashboardData = async () => {
         departmentSnapshot,
         attendanceSummary,
         workProgress,
-        peopleOnLeave,
+        peopleOnLeave: peopleOnLeaveData,
         birthdays,
         pendingLeaves,
         totalEmployees: employees.length,
@@ -823,6 +857,22 @@ export const renderHomePage = async () => {
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
 
+    // Check for cached page state for instant re-navigation
+    const cachedPage = getPageState('/');
+    if (cachedPage) {
+        console.log('⚡ Instant load from page cache');
+        appContent.innerHTML = cachedPage.html;
+        // Re-hydrate interactive elements
+        hydrateAnnouncementsCard();
+        scheduleNotificationRefresh();
+        // Refresh data in background (stale-while-revalidate pattern)
+        loadDashboardData().then(data => {
+            const freshHtml = getPageContentHTML('', buildDashboardLayout(data));
+            cachePageState('/', freshHtml, data);
+        }).catch(() => {});
+        return;
+    }
+
     appContent.innerHTML = getPageContentHTML('', `
         <section class="home-dashboard dashboard-skeleton">
             <div class="dashboard-hero card">
@@ -909,7 +959,10 @@ export const renderHomePage = async () => {
 
     try {
         const dashboardData = await loadDashboardData();
-        appContent.innerHTML = getPageContentHTML('', buildDashboardLayout(dashboardData));
+        const renderedHtml = getPageContentHTML('', buildDashboardLayout(dashboardData));
+        appContent.innerHTML = renderedHtml;
+        // Cache the rendered page for instant re-navigation
+        cachePageState('/', renderedHtml, dashboardData);
         hydrateUserScoreboard(dashboardData);
         hydrateAnnouncementsCard();
         scheduleNotificationRefresh();

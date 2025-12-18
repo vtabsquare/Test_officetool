@@ -6544,7 +6544,15 @@ body.dark .msg-time {
     });
   }
 
-  await refreshConversationList();
+  // Use cached conversation list if available for instant render, then refresh in background
+  if (window.conversationCache && window.conversationCache.length > 0) {
+    console.log('⚡ Chat: Using cached conversation list');
+    renderConversationList();
+    // Refresh in background (stale-while-revalidate)
+    refreshConversationList().catch(() => {});
+  } else {
+    await refreshConversationList();
+  }
 }; // end renderChatPage
 
 // exports for other modules if needed (ES module)
