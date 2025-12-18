@@ -69,6 +69,22 @@ const loaders = {
 export const router = async () => {
   const full = window.location.hash.slice(1) || '/';
   const path = full.split('?')[0] || '/';
+
+  // If we navigate away from Meet, ensure meet UI artifacts are cleaned up
+  if (path !== '/meet') {
+    // Call the cleanup function if it exists
+    if (typeof window.__cleanupMeetUI === 'function') {
+      try { window.__cleanupMeetUI(); } catch (e) { console.warn('cleanupMeetUI error', e); }
+    }
+    // Also forcefully remove any meet-call-modal from the DOM
+    try {
+      const modal = document.getElementById('meet-call-modal');
+      if (modal) {
+        modal.remove();
+      }
+    } catch (e) {}
+  }
+
   // Special-case intern detail
   if (path.startsWith('/interns/')) {
     const internId = decodeURIComponent(path.substring('/interns/'.length));
