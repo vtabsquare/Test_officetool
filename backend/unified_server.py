@@ -10897,14 +10897,14 @@ def update_comp_off(employee_id):
 
 
 # ================== AI ASSISTANT ==================
-from ai_hf import ask_hf
+from ai_gemini import ask_gemini
 from ai_dataverse_service import build_ai_context
 from ai_automation import process_automation, execute_automation_action
 
 @app.route("/api/ai/query", methods=["POST"])
 def ai_query():
     """
-    AI Assistant endpoint - answers questions using HF + Dataverse data.
+    AI Assistant endpoint - answers questions using Gemini + Dataverse data.
     Also handles automation flows (e.g., create employee via chat).
     
     Request body:
@@ -10942,7 +10942,7 @@ def ai_query():
         automation_result = process_automation(question, automation_state, user_employee_id)
         
         # If there's an active automation flow OR this triggers a new one, handle it
-        # This ensures we NEVER fall back to HF during a multi-step automation
+        # This ensures we NEVER fall back to Gemini during a multi-step automation
         has_active_flow = (
             automation_state and 
             automation_state.get("active_flow") is not None
@@ -11092,8 +11092,8 @@ Or type **'cancel'** to abort."""
         # Get chat history
         history = data.get("history", [])
         
-        # Call HF model
-        result = ask_hf(
+        # Call Gemini model
+        result = ask_gemini(
             question=question,
             data_context=data_context,
             user_meta=user_meta,
@@ -11123,17 +11123,15 @@ Or type **'cancel'** to abort."""
             "error": str(e)
         }), 500
 
-
 @app.route("/api/ai/health", methods=["GET"])
 def ai_health():
     """Check if AI service is available."""
     return jsonify({
         "status": "ok",
         "service": "AI Assistant",
-        "model": "Hugging Face Inference",
-        "backend_model_id": os.getenv("HF_MODEL_ID", "mistralai/Mistral-7B-Instruct-v0.2")
+        "model": "Gemini",
+        "backend_model_id": "gemini-2.0-flash"
     })
-
 
 # ================== LOGIN EVENTS (Location Tracking) ==================
 @app.route("/api/login-activity", methods=["PUT"])
