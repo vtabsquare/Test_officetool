@@ -2930,12 +2930,15 @@ export const renderMeetPage = async () => {
         };
 
         const cancelOutgoingCall = () => {
+            console.log('[MEET] cancelOutgoingCall called');
             try {
                 const callId = currentCallId || currentMeetInfo?.call_id;
                 const adminId = String(state?.user?.id || '').trim() || 'admin';
                 const emitter = window.__emitMeetCallCancel;
+                console.log('[MEET] Cancel call - callId:', callId, 'adminId:', adminId, 'emitter exists:', typeof emitter === 'function');
                 if (callId && typeof emitter === 'function') {
                     emitter({ call_id: callId, admin_id: adminId });
+                    console.log('[MEET] Emitted call:cancel event');
                 }
             } catch (err) {
                 console.warn('cancelOutgoingCall error', err);
@@ -2947,6 +2950,7 @@ export const renderMeetPage = async () => {
                 renderCallList();
             } catch (_) {}
             closeCallModal();
+            console.log('[MEET] Modal closed');
         };
 
         const buildEmployeeCards = () => {
@@ -3315,12 +3319,15 @@ export const renderMeetPage = async () => {
                 const target = ev.target;
                 const closeBtn = target.closest('#meet-call-close');
                 const cancelBtn = target.closest('#meet-call-cancel');
+                console.log('[MEET] Modal click - target:', target.tagName, target.id, 'closeBtn:', !!closeBtn, 'cancelBtn:', !!cancelBtn);
                 if (closeBtn || cancelBtn) {
                     ev.preventDefault();
                     ev.stopPropagation();
                     if (cancelBtn) {
+                        console.log('[MEET] Cancel button clicked via delegation');
                         cancelOutgoingCall();
                     } else {
+                        console.log('[MEET] Close button clicked via delegation');
                         closeCallModal();
                     }
                 }
@@ -3336,11 +3343,15 @@ export const renderMeetPage = async () => {
             });
         }
         if (callCancelBtn) {
+            console.log('[MEET] Cancel button found, attaching direct listener');
             callCancelBtn.addEventListener('click', (ev) => {
+                console.log('[MEET] Cancel button direct click');
                 ev.preventDefault();
                 ev.stopPropagation();
                 cancelOutgoingCall();
             });
+        } else {
+            console.warn('[MEET] Cancel button NOT found in DOM');
         }
 
         if (form) {
