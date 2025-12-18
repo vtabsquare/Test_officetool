@@ -10590,3 +10590,133 @@ body.dark-theme .group-info-section {
 body.dark-theme .group-info-created {
   border-bottom-color: #0b141a;
 }
+
+/* ========================================
+   MODAL SCROLLABILITY & THEME FIXES
+   ======================================== */
+
+/* Ensure modal overlay allows scrolling for tall content */
+.modal-overlay {
+  overflow-y: auto;
+  padding: 2rem 1rem;
+}
+
+/* Modal container - allow content to scroll */
+.modal {
+  max-height: 90vh;
+  overflow: visible;
+}
+
+/* Modal body - scrollable content area */
+.modal-body {
+  overflow-y: auto;
+  max-height: calc(90vh - 120px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+/* Form section - proper dark/light mode */
+.form-section {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #1e293b;
+}
+
+body.dark-theme .form-section {
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
+}
+
+/* Form inputs in dark mode */
+body.dark-theme .form-section input,
+body.dark-theme .form-section select,
+body.dark-theme .form-section textarea {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+body.dark-theme .form-section input:focus,
+body.dark-theme .form-section select:focus,
+body.dark-theme .form-section textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+body.dark-theme .form-section input::placeholder,
+body.dark-theme .form-section textarea::placeholder {
+  color: #64748b;
+}
+
+/* Form labels in dark mode */
+body.dark-theme .form-section label,
+body.dark-theme .form-section .form-eyebrow,
+body.dark-theme .form-section .form-section-title {
+  color: #e2e8f0;
+}
+
+body.dark-theme .form-section .form-eyebrow {
+  color: #94a3b8;
+}
+
+/* Modal header in dark mode */
+body.dark-theme .modal-header h2,
+body.dark-theme .modal-header .modal-title {
+  color: #f1f5f9;
+}
+
+/* Modal close button in dark mode */
+body.dark-theme .modal-close-btn {
+  color: #94a3b8;
+}
+
+body.dark-theme .modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+/* Dropdown/Select in dark mode */
+body.dark-theme .form-section select option {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+/* Button styling in modals */
+body.dark-theme .form-section .btn-primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  color: white;
+}
+
+body.dark-theme .form-section .btn-primary:hover {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+}
+
+body.dark-theme .form-section .btn-secondary {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+}
+
+body.dark-theme .form-section .btn-secondary:hover {
+  background: #475569;
+}

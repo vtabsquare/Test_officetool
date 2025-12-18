@@ -2892,13 +2892,63 @@ def checkout():
         _sync_login_activity_from_event(event)
 
         session = active_sessions.get(key)
+        now = datetime.now()
+        
+        # If no in-memory session, try to recover from Dataverse
+        # This handles server restarts where active_sessions is cleared
+        if not session:
+            try:
+                formatted_date = now.date().isoformat()
+                token = get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "OData-MaxVersion": "4.0",
+                    "OData-Version": "4.0",
+                }
+                filter_query = (
+                    f"?$filter={FIELD_EMPLOYEE_ID} eq '{normalized_emp_id}' "
+                    f"and {FIELD_DATE} eq '{formatted_date}'"
+                )
+                url = f"{RESOURCE}/api/data/v9.2/{ATTENDANCE_ENTITY}{filter_query}"
+                resp = requests.get(url, headers=headers, timeout=20)
+                if resp.status_code == 200:
+                    vals = resp.json().get("value", [])
+                    if vals:
+                        rec = vals[0]
+                        checkin_time = rec.get(FIELD_CHECKIN)
+                        checkout_time = rec.get(FIELD_CHECKOUT)
+                        # If there's a check-in but no checkout, recover the session
+                        if checkin_time and not checkout_time:
+                            record_id = (
+                                rec.get(FIELD_RECORD_ID)
+                                or rec.get("cr6f_table13id")
+                                or rec.get("id")
+                            )
+                            # Reconstruct checkin datetime from today's date + checkin time
+                            try:
+                                checkin_dt = datetime.strptime(checkin_time, "%H:%M:%S").replace(
+                                    year=now.year, month=now.month, day=now.day
+                                )
+                            except:
+                                checkin_dt = now  # Fallback
+                            session = {
+                                "record_id": record_id,
+                                "checkin_time": checkin_time,
+                                "checkin_datetime": checkin_dt.isoformat(),
+                                "attendance_id": rec.get(FIELD_ATTENDANCE_ID_CUSTOM),
+                                "recovered": True,
+                            }
+                            active_sessions[key] = session
+                            print(f"[INFO] Recovered session from Dataverse for {key}")
+            except Exception as recover_err:
+                print(f"[WARN] Failed to recover session from Dataverse: {recover_err}")
+        
         if not session:
             return jsonify({
                 "success": False,
                 "error": "No active check-in found. Please check in first.",
             }), 400
-
-        now = datetime.now()
         checkout_time_str = now.strftime("%H:%M:%S")
 
         # Calculate session duration in seconds
@@ -3051,6 +3101,56 @@ def get_status(employee_id):
         if normalized_emp_id.isdigit():
             normalized_emp_id = format_employee_id(int(normalized_emp_id))
         key = normalized_emp_id
+
+        # Try to recover session from Dataverse if not in memory
+        # This handles server restarts
+        if key not in active_sessions:
+            try:
+                from datetime import date as _date
+                formatted_date = _date.today().isoformat()
+                now = datetime.now()
+                token = get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "OData-MaxVersion": "4.0",
+                    "OData-Version": "4.0",
+                }
+                filter_query = (
+                    f"?$filter={FIELD_EMPLOYEE_ID} eq '{normalized_emp_id}' "
+                    f"and {FIELD_DATE} eq '{formatted_date}'"
+                )
+                url = f"{RESOURCE}/api/data/v9.2/{ATTENDANCE_ENTITY}{filter_query}"
+                resp = requests.get(url, headers=headers, timeout=20)
+                if resp.status_code == 200:
+                    vals = resp.json().get("value", [])
+                    if vals:
+                        rec = vals[0]
+                        checkin_time_rec = rec.get(FIELD_CHECKIN)
+                        checkout_time_rec = rec.get(FIELD_CHECKOUT)
+                        # If there's a check-in but no checkout, recover the session
+                        if checkin_time_rec and not checkout_time_rec:
+                            record_id = (
+                                rec.get(FIELD_RECORD_ID)
+                                or rec.get("cr6f_table13id")
+                                or rec.get("id")
+                            )
+                            try:
+                                checkin_dt = datetime.strptime(checkin_time_rec, "%H:%M:%S").replace(
+                                    year=now.year, month=now.month, day=now.day
+                                )
+                            except:
+                                checkin_dt = now
+                            active_sessions[key] = {
+                                "record_id": record_id,
+                                "checkin_time": checkin_time_rec,
+                                "checkin_datetime": checkin_dt.isoformat(),
+                                "attendance_id": rec.get(FIELD_ATTENDANCE_ID_CUSTOM),
+                                "recovered": True,
+                            }
+                            print(f"[INFO] Recovered session from Dataverse for status check: {key}")
+            except Exception as recover_err:
+                print(f"[WARN] Failed to recover session in status: {recover_err}")
 
         active = key in active_sessions
         elapsed = 0
