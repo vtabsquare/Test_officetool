@@ -200,8 +200,8 @@ const teamRow = (emp, days, logs) => {
         }
         if (!isFuture && h > 0) {
             const icon = manualFlags[i]
-                ? '<i class="fa-solid fa-user" style="font-size:10px; color:#eaf2ff; position:absolute; top:4px; right:4px;" title="Manual entry (edited by L2/L3)"></i>'
-                : '<i class="fa-regular fa-clock" style="font-size:10px; color:#eaf2ff; position:absolute; top:4px; right:4px;" title="Automatic capture"></i>';
+                ? '<i class="fa-solid fa-users" style="font-size:10px; color:#eaf2ff; position:absolute; top:4px; right:4px;" title="Manually edited by admin"></i>'
+                : '<i class="fa-regular fa-clock" style="font-size:10px; color:#eaf2ff; position:absolute; top:4px; right:4px;" title="Automatic capture (play/stop)"></i>';
             return `<div class="tt-cell worked" data-emp="${emp.id}" data-date="${ds}" style="position:relative;"><span style="font-weight:700; font-size:13px;">${formatTime(h)}</span>${icon}</div>`;
         }
         return `<div class="tt-cell empty"></div>`;
@@ -973,7 +973,8 @@ export const renderMyTimesheetPage = async () => {
                     task_id: l.task_id,
                     task_name: l.task_name,
                     billing: 'Non-billable',
-                    hours: Array(7).fill(0)
+                    hours: Array(7).fill(0),
+                    manualFlags: Array(7).fill(false)
                 };
             }
             // Match log date to day column using string comparison (YYYY-MM-DD)
@@ -988,6 +989,7 @@ export const renderMyTimesheetPage = async () => {
                         const seconds = Number(l.seconds || 0);
                         const existingSecs = grouped[key].hours[i] || 0;
                         grouped[key].hours[i] = existingSecs + seconds;
+                        if (l.manual) grouped[key].manualFlags[i] = true;
                         break;
                     }
                 }
@@ -1091,10 +1093,10 @@ export const renderMyTimesheetPage = async () => {
                 const isFuture = dayDateStr > todayStr;
                 const secRaw = Number(ov[dayIdx] ?? h ?? 0);
                 const sec = isFuture ? 0 : secRaw; // hide any future-dated values
-                const isManual = ov[dayIdx] !== undefined && ov[dayIdx] !== null;
+                const isManual = (row.manualFlags && row.manualFlags[dayIdx]) || (ov[dayIdx] !== undefined && ov[dayIdx] !== null);
                 const displayVal = sec ? formatTime(sec) : '';
                 const placeholderVal = isSunday ? 'Day off' : '00:00';
-                const icon = isFuture ? '' : (isManual ? `<i class="fa-regular fa-clock" style="font-size:11px; color:#60a5fa; margin-left:4px;" title="Manual entry"></i>` : (sec > 0 ? `<i class="fa-regular fa-user" style="font-size:11px; color:#10b981; margin-left:4px;" title="Automatic capture"></i>` : ''));
+                const icon = isFuture ? '' : (isManual ? `<i class="fa-solid fa-users" style="font-size:11px; color:#60a5fa; margin-left:4px;" title="Manually edited by admin"></i>` : (sec > 0 ? `<i class="fa-regular fa-clock" style="font-size:11px; color:#10b981; margin-left:4px;" title="Automatic capture (play/stop)"></i>` : ''));
                 return `
                     <td class="${classes}">
                         <div style="display:flex; align-items:center; justify-content:center; gap:2px;">
@@ -3364,6 +3366,27 @@ export const renderMeetPage = async () => {
         renderParticipants();
         renderSelectedProjects();
         updateCallButtonState();
+
+        // Load employee directory and render the employee grid
+        (async () => {
+            try {
+                await loadEmployeeDirectory();
+                buildEmployeeCards();
+                renderEmployeeGrid();
+                if (employeeCountEl) {
+                    employeeCountEl.textContent = `${employeesDirectory.size} employees`;
+                }
+            } catch (err) {
+                console.error('Failed to load employee directory for grid', err);
+                if (employeeGrid) {
+                    employeeGrid.innerHTML = `
+                        <div class="placeholder-text" style="grid-column:1 / -1; color:#dc2626;">
+                            <p>Failed to load employees. Please refresh.</p>
+                        </div>
+                    `;
+                }
+            }
+        })();
     }, 0);
 };
 
