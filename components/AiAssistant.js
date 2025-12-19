@@ -1,8 +1,69 @@
 // AiAssistant.js - Global AI Chat Assistant with sleek UI
 import { API_BASE_URL } from '../config.js';
 import { state } from '../state.js';
+import { checkIn, checkOut } from '../features/attendanceApi.js';
 
 let isOpen = false;
+
+/**
+ * Get current geolocation from browser (same as timer.js).
+ * Returns { lat, lng, accuracy_m } or null if unavailable/denied.
+ */
+const getGeolocation = () => {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            console.log('[AI] Geolocation not supported');
+            resolve(null);
+            return;
+        }
+
+        let resolved = false;
+
+        // Try high accuracy first with longer timeout
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                if (resolved) return;
+                resolved = true;
+                const location = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy_m: pos.coords.accuracy,
+                    source: 'browser',
+                };
+                console.log('[AI] Geolocation captured:', location);
+                resolve(location);
+            },
+            (err) => {
+                console.warn('[AI] High accuracy geolocation error:', err.message);
+                // Fallback: try with low accuracy (faster, uses network/WiFi)
+                if (!resolved) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            if (resolved) return;
+                            resolved = true;
+                            const location = {
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude,
+                                accuracy_m: pos.coords.accuracy,
+                                source: 'browser-lowaccuracy',
+                            };
+                            console.log('[AI] Geolocation captured (low accuracy):', location);
+                            resolve(location);
+                        },
+                        (err2) => {
+                            if (resolved) return;
+                            resolved = true;
+                            console.warn('[AI] Low accuracy geolocation also failed:', err2.message);
+                            resolve(null);
+                        },
+                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+                    );
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+    });
+};
 let messages = [];
 let isLoading = false;
 let automationState = null; // State for multi-step automation flows
@@ -380,38 +441,80 @@ async function showActionSuccess(actionResult) {
         }, 500);
     }
     
-    // Handle check-in action - update the timer button UI
+    // Handle check-in action - CALL SAME API AS MANUAL BUTTON with location
     if (actionResult.checkin_time) {
-        console.log(`[AI] Check-in completed at: ${actionResult.checkin_time}`);
+        console.log(`[AI] Check-in initiated at: ${actionResult.checkin_time}`);
         
         try {
             // Import timer functions and state
             const { updateTimerButton, updateTimerDisplay } = await import('../features/timer.js');
             
-            // Update state to reflect check-in
+            const uid = String(state.user?.id || '').toUpperCase();
+            const today = new Date();
+            const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            // ⚡ OPTIMISTIC UI UPDATE - Start timer INSTANTLY (same as manual)
+            const clickTime = Date.now();
+            const previousSeconds = typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0;
+            
             state.timer.isRunning = true;
-            state.timer.startTime = Date.now();
+            state.timer.startTime = clickTime;
+            state.timer.lastDuration = previousSeconds;
             
-            // If there's existing time from today, adjust the start time
-            if (actionResult.total_seconds_today) {
-                state.timer.startTime = Date.now() - (actionResult.total_seconds_today * 1000);
-            }
-            
-            // Start the timer interval
-            if (state.timer.intervalId) {
-                clearInterval(state.timer.intervalId);
-            }
+            if (state.timer.intervalId) clearInterval(state.timer.intervalId);
             state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
-            
-            // Save to localStorage
-            localStorage.setItem('timerState', JSON.stringify({ 
-                isRunning: true, 
-                startTime: state.timer.startTime 
-            }));
-            
-            // Update the button UI
             updateTimerButton();
             updateTimerDisplay();
+            
+            // Save optimistic state to localStorage
+            try {
+                const payload = {
+                    isRunning: true,
+                    startTime: clickTime,
+                    date: dateStr,
+                    mode: 'running',
+                    durationSeconds: previousSeconds,
+                };
+                localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
+            } catch {}
+            
+            // 🌐 Background: Capture location and call SAME API as manual button (non-blocking)
+            (async () => {
+                try {
+                    const location = await getGeolocation();
+                    const result = await checkIn(uid, location);
+                    
+                    // Sync with backend data if needed
+                    const backendSeconds = Number(result.total_seconds_today || 0);
+                    if (backendSeconds > previousSeconds) {
+                        state.timer.lastDuration = backendSeconds;
+                        try {
+                            const payload = {
+                                isRunning: true,
+                                startTime: clickTime,
+                                date: dateStr,
+                                mode: 'running',
+                                durationSeconds: backendSeconds,
+                            };
+                            localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
+                        } catch {}
+                    }
+                    
+                    console.log('[AI] Check-in confirmed by backend with location:', result.checkin_time);
+                } catch (e) {
+                    console.error('[AI] Check-in API failed:', e);
+                    // Rollback optimistic update on failure
+                    if (state.timer.intervalId) clearInterval(state.timer.intervalId);
+                    state.timer.isRunning = false;
+                    state.timer.startTime = null;
+                    state.timer.intervalId = null;
+                    try {
+                        localStorage.removeItem(uid ? `timerState_${uid}` : 'timerState');
+                    } catch {}
+                    updateTimerButton();
+                    updateTimerDisplay();
+                }
+            })();
             
             console.log('[AI] Timer button updated to CHECK OUT state');
         } catch (err) {
@@ -419,30 +522,87 @@ async function showActionSuccess(actionResult) {
         }
     }
     
-    // Handle check-out action - update the timer button UI
+    // Handle check-out action - CALL SAME API AS MANUAL BUTTON with location
     if (actionResult.checkout_time) {
-        console.log(`[AI] Check-out completed at: ${actionResult.checkout_time}`);
+        console.log(`[AI] Check-out initiated at: ${actionResult.checkout_time}`);
         
         try {
             // Import timer functions
             const { updateTimerButton, updateTimerDisplay } = await import('../features/timer.js');
             
-            // Stop the timer
-            if (state.timer.intervalId) {
-                clearInterval(state.timer.intervalId);
+            const uid = String(state.user?.id || '').toUpperCase();
+            const today = new Date();
+            const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            // ⚡ OPTIMISTIC UI UPDATE - Stop timer INSTANTLY (same as manual)
+            const clickTime = Date.now();
+            const baseBefore = typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0;
+            let localElapsed = 0;
+            if (state.timer.startTime) {
+                localElapsed = Math.max(0, Math.floor((clickTime - Number(state.timer.startTime)) / 1000));
             }
+            const localTotal = baseBefore + localElapsed;
+            
+            // Stop timer but PRESERVE duration (same as manual)
+            if (state.timer.intervalId) clearInterval(state.timer.intervalId);
             state.timer.isRunning = false;
             state.timer.intervalId = null;
             state.timer.startTime = null;
-            
-            // Clear localStorage
-            localStorage.removeItem('timerState');
-            
-            // Update the button UI
+            state.timer.lastDuration = localTotal;
             updateTimerButton();
             updateTimerDisplay();
             
-            console.log('[AI] Timer button updated to CHECK IN state');
+            // Save optimistic state to localStorage (NOT remove - preserve duration)
+            try {
+                const payload = {
+                    isRunning: false,
+                    startTime: null,
+                    date: dateStr,
+                    mode: 'stopped',
+                    durationSeconds: localTotal,
+                };
+                localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
+            } catch {}
+            
+            // 🌐 Background: Capture location and call SAME API as manual button (non-blocking)
+            (async () => {
+                try {
+                    const location = await getGeolocation();
+                    const result = await checkOut(uid, location);
+                    
+                    // Sync with backend if it has a larger total
+                    let backendTotal = 0;
+                    if (typeof result.total_seconds_today === 'number' && result.total_seconds_today > 0) {
+                        backendTotal = Math.floor(result.total_seconds_today);
+                    } else if (typeof result.total_hours === 'number' && result.total_hours > 0) {
+                        backendTotal = Math.floor(result.total_hours * 3600);
+                    }
+                    
+                    const lastSeconds = Math.max(localTotal, backendTotal || 0);
+                    if (lastSeconds > localTotal) {
+                        state.timer.lastDuration = lastSeconds;
+                        try {
+                            const payload = {
+                                isRunning: false,
+                                startTime: null,
+                                date: dateStr,
+                                mode: 'stopped',
+                                durationSeconds: lastSeconds,
+                            };
+                            localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
+                        } catch {}
+                        updateTimerDisplay();
+                    }
+                    
+                    console.log('[AI] Check-out confirmed by backend with location:', result.checkout_time);
+                } catch (e) {
+                    console.error('[AI] Check-out API failed:', e);
+                    // Don't rollback - timer is already stopped, backend will sync on next check-in
+                    console.warn('[AI] Check-out not saved to backend. Will sync on next check-in.');
+                }
+            })();
+            
+            console.log('[AI] Timer button updated to CHECK IN state, localTotal preserved:', localTotal);
             
             // Refresh attendance page if on it
             if (window.location.hash.includes('attendance')) {
