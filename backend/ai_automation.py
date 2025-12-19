@@ -1303,7 +1303,9 @@ def _handle_check_action(
 def handle_task_start_flow(
     user_message: str,
     state: 'ConversationState',
-    user_employee_id: str = None
+    user_employee_id: str = None,
+    user_employee_name: str = None,
+    user_employee_email: str = None
 ) -> Tuple[str, 'ConversationState', Optional[Dict[str, Any]]]:
     """
     Handle the task start flow:
@@ -1327,7 +1329,9 @@ def handle_task_start_flow(
         # Return action to fetch tasks
         action = {
             "type": "fetch_my_tasks",
-            "employee_id": user_employee_id
+            "employee_id": user_employee_id,
+            "employee_name": user_employee_name or "",
+            "employee_email": user_employee_email or ""
         }
         return "📋 Fetching your tasks...", state, action
     
@@ -1408,7 +1412,9 @@ def handle_task_stop_flow(
 def process_automation(
     user_message: str,
     conversation_state: Optional[Dict[str, Any]] = None,
-    user_employee_id: Optional[str] = None
+    user_employee_id: Optional[str] = None,
+    user_employee_name: Optional[str] = None,
+    user_employee_email: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Main entry point for processing automation flows.
@@ -1416,6 +1422,9 @@ def process_automation(
     Args:
         user_message: The user's message
         conversation_state: Optional existing conversation state (from frontend)
+        user_employee_id: Employee ID of the logged-in user
+        user_employee_name: Name of the logged-in user
+        user_employee_email: Email of the logged-in user
     
     Returns:
         Dict with:
@@ -1474,7 +1483,7 @@ def process_automation(
                 "action": action
             }
         elif state.active_flow == "task_start":
-            response, state, action = handle_task_start_flow(user_message, state, user_employee_id)
+            response, state, action = handle_task_start_flow(user_message, state, user_employee_id, user_employee_name, user_employee_email)
             return {
                 "is_automation": True,
                 "response": response,
@@ -1542,7 +1551,7 @@ def process_automation(
                 "action": action
             }
         elif intent["flow"] == "task_start":
-            response, state, action = handle_task_start_flow(user_message, state, user_employee_id)
+            response, state, action = handle_task_start_flow(user_message, state, user_employee_id, user_employee_name, user_employee_email)
             return {
                 "is_automation": True,
                 "response": response,

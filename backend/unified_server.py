@@ -10937,9 +10937,11 @@ def ai_query():
         # Get automation state from request (for multi-step flows)
         automation_state = data.get("automationState", None)
         
-        # Check for automation flow first (pass user_employee_id for check-in/out and leave flows)
+        # Check for automation flow first (pass user info for check-in/out, leave, and task flows)
         user_employee_id = user_meta.get("employee_id", "")
-        automation_result = process_automation(question, automation_state, user_employee_id)
+        user_employee_name = user_meta.get("name", "")
+        user_employee_email = user_meta.get("email", "")
+        automation_result = process_automation(question, automation_state, user_employee_id, user_employee_name, user_employee_email)
         
         # If there's an active automation flow OR this triggers a new one, handle it
         # This ensures we NEVER fall back to Gemini during a multi-step automation
