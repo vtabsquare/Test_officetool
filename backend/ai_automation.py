@@ -5,8 +5,12 @@ like creating employees, applying for leave, etc.
 """
 import json
 import re
+import os
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
+
+# Backend API base URL - uses environment variable in production, localhost for dev
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://vtab-office-tool.onrender.com")
 
 # ================== EMPLOYEE CREATION FLOW ==================
 
@@ -2586,7 +2590,7 @@ Please review in HR Tool.
                 }
             
             # Call the my-tasks endpoint
-            api_url = "http://localhost:5000/api/my-tasks"
+            api_url = f"{BACKEND_API_URL}/api/my-tasks"
             params = {
                 "user_id": employee_id,
                 "role": "l1"
