@@ -9,8 +9,16 @@ import os
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
-# Backend API base URL - uses environment variable in production, localhost for dev
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://vtab-office-tool.onrender.com")
+# Backend API base URLs
+# - BACKEND_API_URL: public URL (used by frontend or external callers)
+# - BACKEND_API_INTERNAL_URL: internal URL for server-to-server calls
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://vtab-office-tool.onrender.com").rstrip("/")
+BACKEND_API_INTERNAL_URL = os.getenv("BACKEND_API_INTERNAL_URL") or os.getenv("BACKEND_INTERNAL_URL")
+if BACKEND_API_INTERNAL_URL:
+    BACKEND_API_INTERNAL_URL = BACKEND_API_INTERNAL_URL.rstrip("/")
+else:
+    # Default to local loopback so the backend can call its own API without going over the public internet
+    BACKEND_API_INTERNAL_URL = "http://127.0.0.1:5000"
 
 # ================== EMPLOYEE CREATION FLOW ==================
 
@@ -2580,7 +2588,9 @@ Please review in HR Tool.
     # ==================== FETCH MY TASKS ====================
     if action["type"] == "fetch_my_tasks":
         try:
-            import requests as req
+            # Import the function directly to avoid HTTP call (same process)
+            from time_tracking import list_my_tasks as _list_my_tasks_fn
+            from flask import Flask
             
             employee_id = action.get("employee_id", "")
             if not employee_id:
@@ -2589,17 +2599,30 @@ Please review in HR Tool.
                     "error": "Employee ID is required to fetch tasks."
                 }
             
-            # Call the my-tasks endpoint
-            api_url = f"{BACKEND_API_URL}/api/my-tasks"
-            params = {
-                "user_id": employee_id,
-                "role": "l1"
-            }
-            
-            resp = req.get(api_url, params=params, timeout=30)
-            if resp.ok:
-                data = resp.json()
-                if data.get("success"):
+            # Call the function directly within a request context
+            # This avoids HTTP overhead and timeout issues on Render
+            from unified_server import app
+            with app.test_request_context(
+                '/api/my-tasks',
+                method='GET',
+                query_string={
+                    'user_id': employee_id,
+                    'user_name': action.get("employee_name") or "",
+                    'user_email': action.get("employee_email") or "",
+                    'role': 'l1'
+                }
+            ):
+                response = _list_my_tasks_fn()
+                # Response is a tuple (jsonify_obj, status_code) or just jsonify_obj
+                if isinstance(response, tuple):
+                    json_response, status_code = response
+                else:
+                    json_response = response
+                    status_code = 200
+                
+                data = json_response.get_json()
+                
+                if status_code == 200 and data.get("success"):
                     tasks = data.get("tasks", [])
                     return {
                         "success": True,
@@ -2611,11 +2634,6 @@ Please review in HR Tool.
                         "success": False,
                         "error": data.get("error", "Failed to fetch tasks")
                     }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to fetch tasks: {resp.status_code}"
-                }
         except Exception as e:
             import traceback
             traceback.print_exc()
