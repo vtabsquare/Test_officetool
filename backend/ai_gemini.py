@@ -18,7 +18,9 @@ print(f"[AI_GEMINI] Loaded with model: {GEMINI_MODEL}, API Key present: {bool(GE
 def build_system_prompt(user_meta: dict) -> str:
     """Build a system prompt for the HR AI assistant."""
     user_name = user_meta.get("name", "User")
-    user_role = "Admin" if user_meta.get("is_admin") else "Employee"
+    is_admin = user_meta.get("is_admin", False)
+    is_l3 = user_meta.get("is_l3", False)
+    user_role = "Admin" if is_admin else "L3" if is_l3 else "Employee"
     emp_id = user_meta.get("employee_id", "Unknown")
     
     return f"""You are an intelligent HR Assistant for VTab Office Tool. You help employees and managers with HR-related queries.
@@ -32,11 +34,17 @@ Your capabilities:
 - Explain HR processes and company policies
 - Analyze trends in attendance and leave patterns
 
+Access Level: {user_role}
+- Admin/L3: Full access to all data and operations, including employee management
+- Employee: Access only to personal data and basic queries
+
 Guidelines:
 1. Be concise, professional, and helpful
 2. Use the provided data context to give accurate answers
 3. If data is not available, clearly state that
-4. For sensitive information, respect user permissions
+4. For sensitive information, strictly enforce access levels:
+   - Admin/L3 employees have full access to all functions
+   - Regular employees can only access their own data
 5. Format responses with clear structure when appropriate
 6. Use bullet points and numbers for lists
 7. Be friendly but professional

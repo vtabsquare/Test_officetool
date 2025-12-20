@@ -17,6 +17,65 @@ import logging
 # --------------------------------------------------------------
 chat_bp = Blueprint("chat", __name__, url_prefix="/chat")
 
+@chat_bp.route('/chatbot/query', methods=['POST'])
+def chatbot_query():
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        query = data.get('query')
+        
+        if not user_id or not query:
+            return jsonify({'error': 'User ID and query are required'}), 400
+            
+        # Check if user is admin
+        token = _get_oauth_token()
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/json'
+        }
+        
+        # Get user details
+        q = f"$filter=crc6f_employeeid eq '{user_id}'&$select=crc6f_designation"
+        resp = dataverse_get(EMPLOYEE_ENTITY_SET, q)
+        if not resp.get('value'):
+            return jsonify({'error': 'User not found'}), 404
+            
+        user = resp['value'][0]
+        designation = user.get('crc6f_designation', '').lower()
+        
+        if not ('admin' in designation or 'manager' in designation):
+            return jsonify({'error': 'Admin access required'}), 403
+            
+        # Process the query and get data from relevant tables
+        # This is a simple example - you can expand this to handle more complex queries
+        tables = {
+            'employees': EMPLOYEE_ENTITY_SET,
+            'attendance': 'crc6f_table13s',
+            'leaves': 'crc6f_table14s',
+            'projects': 'crc6f_hr_projectheaders',
+            'clients': 'crc6f_hr_clients'
+        }
+        
+        results = {}
+        for table_name, entity_set in tables.items():
+            try:
+                data = dataverse_get(entity_set)
+                results[table_name] = data.get('value', [])
+            except Exception as e:
+                print(f'Error fetching {table_name}: {str(e)}')
+                continue
+                
+        # Here you can add natural language processing to interpret the query
+        # and filter/process the results accordingly
+        
+        return jsonify({
+            'query': query,
+            'results': results
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)

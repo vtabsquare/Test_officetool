@@ -277,7 +277,7 @@ def build_ai_context(token: str, user_meta: dict, scope: str = "general") -> dic
     
     Args:
         token: Dataverse access token
-        user_meta: User info (employee_id, is_admin, etc.)
+        user_meta: User info (employee_id, is_admin, is_l3, etc.)
         scope: Query scope ('general', 'attendance', 'leave', 'employee', etc.)
     
     Returns:
@@ -285,47 +285,51 @@ def build_ai_context(token: str, user_meta: dict, scope: str = "general") -> dic
     """
     context = {
         "timestamp": datetime.now().isoformat(),
-        "user_role": "Admin" if user_meta.get("is_admin") else "Employee",
+        "user_role": "Admin" if user_meta.get("is_admin") else "L3" if user_meta.get("is_l3") else "Employee",
     }
     
     emp_id = user_meta.get("employee_id")
     is_admin = user_meta.get("is_admin", False)
+    is_l3 = user_meta.get("is_l3", False)
     
     try:
         # Always include basic employee info for the current user
         if emp_id:
             context["current_user_profile"] = get_employee_overview(token, emp_id)
         
-        # Scope-based data fetching
+        # Scope-based data fetching with L3 permissions
         if scope in ["general", "employee", "all"]:
-            if is_admin:
+            if is_admin or is_l3:  # L3 gets same access as admin
                 context["employees_summary"] = get_all_employees_summary(token)
             elif emp_id:
                 context["my_profile"] = get_employee_overview(token, emp_id)
         
         if scope in ["general", "attendance", "all"]:
-            if is_admin:
+            if is_admin or is_l3:  # L3 gets same access as admin
                 context["attendance_summary"] = get_attendance_summary(token, days=30)
             elif emp_id:
                 context["my_attendance"] = get_attendance_summary(token, emp_id=emp_id, days=30)
         
         if scope in ["general", "leave", "all"]:
-            if is_admin:
+            if is_admin or is_l3:  # L3 gets same access as admin
                 context["leave_summary"] = get_leave_summary(token)
             elif emp_id:
                 context["my_leaves"] = get_leave_summary(token, emp_id=emp_id)
         
-        if scope in ["general", "assets", "all"] and is_admin:
-            context["assets_summary"] = get_assets_summary(token)
+        if scope in ["general", "assets", "all"]:
+            if is_admin or is_l3:  # L3 gets same access as admin
+                context["assets_summary"] = get_assets_summary(token)
         
         if scope in ["general", "holidays", "all"]:
             context["holidays"] = get_holidays_list(token)
         
-        if scope in ["general", "projects", "all"] and is_admin:
-            context["projects_summary"] = get_projects_summary(token)
+        if scope in ["general", "projects", "all"]:
+            if is_admin or is_l3:  # L3 gets same access as admin
+                context["projects_summary"] = get_projects_summary(token)
         
-        if scope in ["general", "interns", "all"] and is_admin:
-            context["interns_summary"] = get_interns_summary(token)
+        if scope in ["general", "interns", "all"]:
+            if is_admin or is_l3:  # L3 gets same access as admin
+                context["interns_summary"] = get_interns_summary(token)
             
     except Exception as e:
         context["error"] = f"Error fetching some data: {str(e)}"

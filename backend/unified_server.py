@@ -1,12 +1,12 @@
 # unified_server.py - Combined Attendance & Leave Tracker Backend
-from flask import Flask, render_template, request, jsonify ,current_app, redirect
+from flask import Flask, render_template, request, jsonify, current_app, redirect
 from flask_cors import CORS
-from datetime import datetime, timedelta,timezone, date
+from datetime import datetime, timedelta, timezone, date
 from calendar import monthrange
 import random
 import string
 import traceback
-import requests , re
+import requests, re
 import os
 import hashlib
 import json
@@ -20,9 +20,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-from dataverse_helper import create_record, update_record, delete_record, get_access_token,get_employee_name,get_employee_email
+from dataverse_helper import create_record, update_record, delete_record, get_access_token, get_employee_name, get_employee_email, get_record
 from flask_mail import Mail, Message
-from mail_app import send_email 
+from mail_app import send_email
 from project_contributors import bp as contributors_bp
 from project_boards import bp as boards_bp
 from project_tasks import tasks_bp
@@ -37,8 +37,6 @@ except Exception:
 from time_tracking import bp_time as time_bp
 from google_token_store import save_google_token, load_google_token
 
-
-
 app = Flask(__name__)
 
 app.register_blueprint(contributors_bp)
@@ -47,6 +45,96 @@ app.register_blueprint(tasks_bp)
 app.register_blueprint(columns_bp)
 app.register_blueprint(time_bp)
 app.register_blueprint(chat_bp)
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'No authorization token provided'}), 401
+        
+        token = auth_header.split(' ')[1]
+        try:
+            # Verify token and check admin status
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json'
+            }
+            entity_set = get_employee_entity_set(get_access_token())
+            field_map = get_field_map(entity_set)
+            
+            email_field = field_map.get('email')
+            desig_field = field_map.get('designation')
+            
+            if not email_field or not desig_field:
+                return jsonify({'error': 'Invalid configuration'}), 500
+                
+            url = f"{BASE_URL}/{entity_set}?$select={email_field},{desig_field}"
+            resp = requests.get(url, headers=headers)
+            
+            if resp.status_code != 200:
+                return jsonify({'error': 'Invalid token'}), 401
+                
+            user_data = resp.json().get('value', [])[0]
+            designation = user_data.get(desig_field, '').lower()
+            
+            if not ('admin' in designation or 'manager' in designation):
+                return jsonify({'error': 'Admin access required'}), 403
+                
+            return f(*args, **kwargs)
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 401
+            
+    return decorated_function
+
+@app.route('/api/admin/query', methods=['POST'])
+@admin_required
+def admin_query():
+    try:
+        data = request.get_json()
+        entity_name = data.get('entity')
+        query_type = data.get('type', 'select')
+        filters = data.get('filters', {})
+        fields = data.get('fields', [])
+        
+        if not entity_name:
+            return jsonify({'error': 'Entity name is required'}), 400
+            
+        token = get_access_token()
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/json',
+            'OData-MaxVersion': '4.0',
+            'OData-Version': '4.0'
+        }
+        
+        # Build OData query
+        query_parts = []
+        if fields:
+            query_parts.append(f"$select={','.join(fields)}")
+            
+        if filters:
+            filter_conditions = []
+            for field, value in filters.items():
+                if isinstance(value, str):
+                    filter_conditions.append(f"{field} eq '{value}'")
+                else:
+                    filter_conditions.append(f"{field} eq {value}")
+            if filter_conditions:
+                query_parts.append(f"$filter={' and '.join(filter_conditions)}")
+                
+        query_string = '&'.join(query_parts)
+        url = f"{BASE_URL}/{entity_name}?{query_string}"
+        
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            return jsonify({'error': f'Query failed: {response.text}'}), response.status_code
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 allowed_origins = os.getenv("CORS_ORIGINS", "")
 origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
@@ -91,6 +179,55 @@ if os.getenv("FLASK_ENV", "development").lower() != "production":
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 GOOGLE_CLIENT_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "Googlemeet token.json")
+
+def get_employee_entity_set(token):
+    """Get the correct employee entity set name"""
+    global EMPLOYEE_ENTITY
+    
+    if EMPLOYEE_ENTITY_ENV:
+        return EMPLOYEE_ENTITY_ENV
+        
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Accept': 'application/json'
+    }
+    
+    # Try the default first
+    url = f"{BASE_URL}/{EMPLOYEE_ENTITY}?$top=1"
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        return EMPLOYEE_ENTITY
+        
+    # Try alternatives
+    alternatives = [
+        'crc6f_employees',
+        'crc6f_employeeses',
+        'crc6f_hr_employees',
+        'crc6f_hr_employeeses'
+    ]
+    
+    for alt in alternatives:
+        url = f"{BASE_URL}/{alt}?$top=1"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            EMPLOYEE_ENTITY = alt
+            return alt
+            
+    raise Exception('Could not resolve employee entity set')
+
+def get_field_map(entity_set):
+    """Get field mappings for the entity"""
+    field_map = FIELD_MAPS.get(entity_set, {})
+    if not field_map:
+        # Default field mappings
+        field_map = {
+            'email': 'crc6f_email',
+            'designation': 'crc6f_designation',
+            'employee_id': 'crc6f_employeeid',
+            'name': 'crc6f_name'
+        }
+    return field_map
 
 def _maybe_load_google_client_from_file():
     try:

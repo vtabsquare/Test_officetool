@@ -68,13 +68,36 @@ let messages = [];
 let isLoading = false;
 let automationState = null; // State for multi-step automation flows
 
-const AI_SUGGESTIONS = [
-    "Create an employee record",
-    "Edit employee record",
-    "Delete employee record",
-    "How many employees are active?",
-    "Show my attendance summary",
-];
+function getAiSuggestions(user) {
+    const isAdmin = user?.is_admin;
+    const isL3 = user?.is_l3;
+    
+    const suggestions = [
+        // Common suggestions for all users
+        "Show my attendance summary",
+        "Show my leave balance",
+        "Request a leave",
+        
+        // Admin/L3 suggestions
+        ...(isL3 || isAdmin ? [
+            // Team Management
+            "Show team attendance",
+            "Show team leave summary",
+            "Show team performance",
+            // Admin Functions
+            "Create an employee record",
+            "Edit employee record",
+            "Delete employee record",
+            "Show all employees",
+            // Advanced Features
+            "Generate performance report",
+            "Manage assets",
+            "Review intern progress"
+        ] : [])
+    ];
+    
+    return suggestions;
+}
 
 export function createAiAssistant() {
     // Create floating button
@@ -111,7 +134,7 @@ export function createAiAssistant() {
 }
 
 function getAiPanelHTML() {
-    const suggestionsHTML = AI_SUGGESTIONS.map(s => 
+    const suggestionsHTML = getAiSuggestions(state.user).map(s => 
         `<button class="ai-suggestion" data-question="${s}">${s}</button>`
     ).join('');
 
@@ -148,7 +171,8 @@ function getAiPanelHTML() {
                     </svg>
                 </div>
                 <h4>Hi! I'm your HR Assistant</h4>
-                <p>Ask me anything about attendance, leaves, employees, or HR data.</p>
+                <p>Ask me anything about ${(state.user?.is_admin || state.user?.is_l3) ? 'all HR data and operations' : 
+                   'your attendance, leaves, and HR information'}.</p>
                 <div class="ai-suggestions">
                     ${suggestionsHTML}
                 </div>
