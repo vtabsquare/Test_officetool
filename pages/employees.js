@@ -123,8 +123,10 @@ export const renderEmployeesPage = async (filter = '', page = empCurrentPage) =>
             department: e.department || '',
             role: '',
             employmentType: 'Full-time',
-            status: (e.active === true || e.active === 'true' || e.active === 1 || e.active === 'Active') ? 'Active' : 'Inactive'
+            status: (e.active === true || e.active === 'true' || e.active === 1 || e.active === 'Active') ? 'Active' : 'Inactive',
+            employeeFlag: e.employee_flag || 'Employee'
         }));
+
         const totalCount = typeof total === 'number' ? total : undefined;
         const totalPages = totalCount ? Math.max(1, Math.ceil(totalCount / (pageSize || EMP_PAGE_SIZE))) : undefined;
         const prevDisabled = empCurrentPage <= 1 ? 'disabled' : '';
@@ -540,6 +542,14 @@ export const showAddEmployeeModal = () => {
                             <option value="Inactive">Inactive</option>
                         </select>
                     </div>
+                    <div class="form-field">
+                        <label class="form-label" for="employeeFlag">Employee Flag</label>
+                        <select class="input-control" id="employeeFlag" name="employeeFlag" required>
+                            <option value="Employee" selected>Employee</option>
+                            <option value="Intern">Intern</option>
+                        </select>
+                        <p class="helper-text">Flag interns to auto-appear in the Interns module.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -578,7 +588,8 @@ export const handleAddEmployee = async (e) => {
             department: document.getElementById('department').value,
             designation: document.getElementById('designation').value,
             doj: new Date().toISOString().split('T')[0],
-            active: document.getElementById('status').value === 'Active'
+            active: document.getElementById('status').value === 'Active',
+            employee_flag: document.getElementById('employeeFlag').value || 'Employee'
         };
 
         console.log('🔍 DEBUG - Payload:', payload);
@@ -595,7 +606,8 @@ export const handleAddEmployee = async (e) => {
             department: payload.department,
             role: '',
             employmentType: 'Full-time',
-            status: payload.active ? 'Active' : 'Inactive'
+            status: payload.active ? 'Active' : 'Inactive',
+            employeeFlag: payload.employee_flag || 'Employee'
         });
         closeModal();
         renderEmployeesPage();
@@ -613,6 +625,7 @@ export const showEditEmployeeModal = (employeeId) => {
     }
     const [firstPrefill, ...lastParts] = (emp.name || '').split(' ');
     const lastPrefill = lastParts.join(' ');
+    const flagPrefill = emp.employeeFlag || 'Employee';
     const formHTML = `
         <div class="form-grid-2-col">
             <div class="form-group">
@@ -658,6 +671,14 @@ export const showEditEmployeeModal = (employeeId) => {
                 </select>
                 <label for="status">Status</label>
             </div>
+            <div class="form-group">
+                <i class="fa-solid fa-tag"></i>
+                <select id="employeeFlag" name="employeeFlag" required>
+                    <option value="Employee" ${flagPrefill === 'Employee' ? 'selected' : ''}>Employee</option>
+                    <option value="Intern" ${flagPrefill === 'Intern' ? 'selected' : ''}>Intern</option>
+                </select>
+                <label for="employeeFlag">Employee Flag</label>
+            </div>
         </div>
         <input type="hidden" id="editEmployeeId" name="editEmployeeId" value="${emp.id}">
     `;
@@ -676,8 +697,10 @@ export const handleUpdateEmployee = (e) => {
         address: document.getElementById('contactNo').value,
         department: document.getElementById('department').value,
         designation: document.getElementById('designation').value,
-        active: document.getElementById('status').value === 'Active'
+        active: document.getElementById('status').value === 'Active',
+        employee_flag: document.getElementById('employeeFlag').value || 'Employee'
     };
+
     updateEmployee(employee_id, payload).then(() => {
         // Update local cache
         const idx = state.employees.findIndex(x => x.id === employee_id);
@@ -690,7 +713,8 @@ export const handleUpdateEmployee = (e) => {
                 contactNumber: payload.address,
                 jobTitle: payload.designation,
                 department: payload.department,
-                status: payload.active ? 'Active' : 'Inactive'
+                status: payload.active ? 'Active' : 'Inactive',
+                employeeFlag: payload.employee_flag || state.employees[idx].employeeFlag || 'Employee'
             };
         }
         closeModal();

@@ -5482,7 +5482,8 @@ def list_employees():
                             "department": r.get(field_map['department']),
                             "designation": r.get(field_map['designation']),
                             "doj": doj_value,
-                            "active": r.get(field_map['active'])
+                            "active": r.get(field_map['active']),
+                            "employee_flag": r.get(field_map.get('employee_flag'))
                         })
                     return jsonify({
                         "success": True,
