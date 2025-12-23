@@ -395,7 +395,13 @@ const renderAttendanceTrackerPage = (mode) => {
                 <span>${monthName} ${year}</span>
                 <button class="month-nav-btn" data-direction="next"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
-            ${mode === 'my' ? myControls : ''}
+            ${mode === 'my' ? myControls : `
+                <div class="page-header-actions">
+                    <button class="btn btn-secondary" id="export-attendance-btn">
+                        <i class="fa-solid fa-file-export"></i> Export CSV
+                    </button>
+                </div>
+            `}
         </div>
     `;
 
@@ -429,6 +435,12 @@ const renderAttendanceTrackerPage = (mode) => {
 
     // Load and display holidays for current month
     loadHolidaysForMonth(date.getMonth(), year);
+
+    // Set up export button listener
+    const exportBtn = document.getElementById('export-attendance-btn');
+    if (exportBtn && mode === 'team') {
+        exportBtn.addEventListener('click', () => exportTeamAttendanceToCSV(monthName, year));
+    }
 
     if (mode === 'team' && (isAdminUser() || isManagerUserAttendance())) {
         const monthIndex = date.getMonth();
@@ -540,6 +552,78 @@ const openTeamAttendanceEditModal = (employeeId, day, year, monthIndex) => {
             });
         }
     }, 30);
+};
+
+// Function to export team attendance data to CSV
+const exportTeamAttendanceToCSV = (monthName, year) => {
+    const employeeIds = Object.keys(state.attendanceData);
+    const date = state.currentAttendanceDate;
+    const daysInMonth = new Date(year, date.getMonth() + 1, 0).getDate();
+
+    // Prepare CSV data
+    const csvRows = [];
+
+    // Add header row
+    const headers = ['Employee Name', 'Employee ID'];
+    for (let day = 1; day <= daysInMonth; day++) {
+        headers.push(`${day}`);
+    }
+    headers.push('Total Present', 'Total Leaves', 'Total Absent', 'Total Late Entry');
+    csvRows.push(headers.join(','));
+
+    // Add data rows
+    employeeIds.forEach(empId => {
+        const empData = state.attendanceData[empId] || {};
+        const employeeName = empData.employeeName || empId;
+        const row = [employeeName, empId];
+
+        // Track totals
+        let totalPresent = 0;
+        let totalLeaves = 0;
+        let totalAbsent = 0;
+        let totalLate = 0;
+
+        // Add status for each day
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayData = empData[day];
+            let status = '';
+            if (dayData) {
+                if (dayData.leaveType) {
+                    status = 'L';
+                    totalLeaves++;
+                } else if (dayData.status === 'P') {
+                    status = dayData.isLate ? 'PL' : 'P';
+                    totalPresent++;
+                    if (dayData.isLate) totalLate++;
+                } else if (dayData.status === 'A') {
+                    status = 'A';
+                    totalAbsent++;
+                } else if (dayData.status === 'HL' || dayData.status === 'H') {
+                    status = 'HL';
+                    totalPresent += 0.5;
+                    totalAbsent += 0.5;
+                }
+            } else if (isHolidayDate(year, date.getMonth(), day)) {
+                status = 'INL';
+            }
+            row.push(status);
+        }
+
+        // Add totals
+        row.push(totalPresent, totalLeaves, totalAbsent, totalLate);
+        csvRows.push(row.join(','));
+    });
+
+    // Create and download CSV file
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `team_attendance_${monthName.toLowerCase()}_${year}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // Helper function to load and render holidays for the current month
