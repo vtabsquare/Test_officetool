@@ -124,7 +124,7 @@ export const renderEmployeesPage = async (filter = '', page = empCurrentPage) =>
             role: '',
             employmentType: 'Full-time',
             status: (e.active === true || e.active === 'true' || e.active === 1 || e.active === 'Active') ? 'Active' : 'Inactive',
-            employeeFlag: e.employee_flag || 'Employee'
+            employeeFlag: e.employee_flag
         }));
 
         const totalCount = typeof total === 'number' ? total : undefined;
@@ -714,7 +714,7 @@ export const handleUpdateEmployee = (e) => {
                 jobTitle: payload.designation,
                 department: payload.department,
                 status: payload.active ? 'Active' : 'Inactive',
-                employeeFlag: payload.employee_flag || state.employees[idx].employeeFlag || 'Employee'
+                employeeFlag: payload.employee_flag || state.employees[idx].employeeFlag
             };
         }
         closeModal();

@@ -5350,6 +5350,9 @@ def list_employees():
         
         # Build $select from available fields in this entity
         select_list = [field_map[k] for k in ['id', 'fullname', 'firstname', 'lastname', 'email', 'contact', 'address', 'department', 'designation', 'doj', 'active', 'primary'] if field_map.get(k)]
+        if field_map.get('employee_flag'):
+            select_list.append(field_map['employee_flag'])
+        
         # Only include alternate email fields for crc6f_employees table (not crc6f_table12s)
         if entity_set == "crc6f_employees":
             email_alts = ['crc6f_officialemail', 'crc6f_emailaddress', 'emailaddress', 'officialemail', 'crc6f_mail', 'crc6f_quotahours']
@@ -5567,7 +5570,8 @@ def list_employees():
                 "department": r.get(field_map['department']),
                 "designation": r.get(field_map['designation']),
                 "doj": r.get(field_map['doj']),
-                "active": r.get(field_map['active'])
+                "active": r.get(field_map['active']),
+                "employee_flag": r.get(field_map.get('employee_flag'))
             })
         print(f"   [SEND] Returning {len(items)} items for page {page}")
         print(f"{'='*60}\n")
@@ -5938,6 +5942,8 @@ def list_interns():
         }
         # 1) Resolve which employees are marked as "Intern" in the master table
         intern_employee_ids = None
+        intern_employee_records = []
+
         try:
             emp_entity = get_employee_entity_set(token)
             field_map = get_field_map(emp_entity)
@@ -5951,7 +5957,11 @@ def list_interns():
             }
 
             # Fetch all employees where crc6f_employeeflag = 'Intern'
-            emp_select = f"$select={emp_id_field},crc6f_employeeflag"
+            emp_select_fields = {emp_id_field, "crc6f_employeeflag", "createdon"}
+            primary_field = field_map.get("primary")
+            if primary_field:
+                emp_select_fields.add(primary_field)
+            emp_select = "$select=" + ",".join(emp_select_fields)
             emp_filter = "$filter=crc6f_employeeflag eq 'Intern'"
             emp_url = f"{RESOURCE}/api/data/v9.2/{emp_entity}?{emp_select}&$top=5000&{emp_filter}"
 
@@ -5964,9 +5974,14 @@ def list_interns():
                         emp_id_val = _normalize_employee_id(er.get(emp_id_field))
                         if emp_id_val:
                             intern_employee_ids.add(emp_id_val)
+                            intern_employee_records.append({
+                                "employee_id": emp_id_val,
+                                "created_on": er.get("createdon"),
+                            })
             else:
                 print(f"[WARN] Failed to fetch employees with Intern flag: {emp_resp.status_code} {emp_resp.text}")
                 intern_employee_ids = None
+
         except Exception as emp_err:
             print(f"[WARN] Error while resolving Intern employees: {emp_err}")
             intern_employee_ids = None
@@ -5990,10 +6005,24 @@ def list_interns():
         # If we successfully loaded intern employee IDs, filter records by that set
         if intern_employee_ids is not None:
             all_records = []
+            existing_ids = set()
             for rec in raw_records:
                 emp_id_val = _normalize_employee_id(rec.get(INTERN_FIELDS['employee_id']))
                 if emp_id_val and emp_id_val in intern_employee_ids:
                     all_records.append(rec)
+                    existing_ids.add(emp_id_val)
+
+            # Add synthetic entries for flagged employees that don't yet have intern detail rows
+            for flagged in intern_employee_records:
+                fid = flagged.get("employee_id")
+                if not fid or fid in existing_ids:
+                    continue
+                synthetic = {
+                    INTERN_FIELDS['intern_id']: fid,
+                    INTERN_FIELDS['employee_id']: fid,
+                    "createdon": flagged.get("created_on") or datetime.utcnow().isoformat()
+                }
+                all_records.append(synthetic)
         else:
             # Fallback: no employee-filter available, keep all intern records
             all_records = list(raw_records)
@@ -6398,6 +6427,10 @@ def update_employee_api(employee_id):
                 payload[field_map['active']] = "Active" if active_value else "Inactive"
             else:
                 payload[field_map['active']] = "Active" if str(active_value).lower() in ['true', '1', 'active'] else "Inactive"
+
+        # Handle employee flag update
+        if field_map.get('employee_flag') and data.get('employee_flag'):
+            payload[field_map['employee_flag']] = data.get('employee_flag')
 
         # Try to extract the primary record id
         prefer_keys = [primary_field, f"{entity_set[:-1]}id", f"{entity_set}id"]  # heuristic
