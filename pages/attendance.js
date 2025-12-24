@@ -1066,3 +1066,14 @@ async function handleSubmitAttendance() {
         alert(`❌ Failed to submit attendance: ${error.message || error}`);
     }
 }
+
+export const handleAttendanceNav = (direction) => {
+    const currentDate = state.currentAttendanceDate;
+    currentDate.setDate(1); // Avoid month skipping issues
+    if (direction === 'next') {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+    } else {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+    }
+    renderAttendanceTrackerPage(window.location.hash.includes('attendance-team') ? 'team' : 'my');
+};
