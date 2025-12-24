@@ -5,19 +5,13 @@ import { getPageContentHTML } from '../utils.js';
 import { renderModal, closeModal } from '../components/modal.js';
 import { listLoginAccounts, createLoginAccount, updateLoginAccount, deleteLoginAccount, fetchLoginEvents, updateLoginActivity } from '../features/loginSettingsApi.js';
 import { listAllEmployees } from '../features/employeeApi.js';
+import { isAdminUser } from '../utils/accessControl.js';
 
 let currentLoginSettingsView = 'accounts';
 let cachedLoginAccounts = [];
 let cachedLoginActivitySummary = [];
 let loginAccountNameIndex = {};
 let cachedEmployeeDirectory = [];
-
-const isAdminUser = () => {
-    const empId = String(state.user?.id || '').trim().toUpperCase();
-    const email = String(state.user?.email || '').trim().toLowerCase();
-    const flag = !!state.user?.is_admin;
-    return flag || empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
 
 const attachLoginActivityHandlers = (dailySummary = []) => {
     const editButtons = document.querySelectorAll('.la-edit-btn');

@@ -1,22 +1,5 @@
 import { state } from '../state.js';
-
-// Check if current user is admin (EMP001 or bala.t@vtab.com)
-const isAdminUser = () => {
-    const user = state.user || {};
-    const empId = String(user.id || '').trim().toUpperCase();
-    const email = String(user.email || '').trim().toLowerCase();
-    return empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
-
-// Check if current user is L3 level (HR/Admin with onboarding access)
-const isL3User = () => {
-    const user = state.user || {};
-    const designation = String(user.designation || '').trim().toLowerCase();
-    const empId = String(user.id || '').trim().toUpperCase();
-    const email = String(user.email || '').trim().toLowerCase();
-    // L3 users: Admin, HR Manager, or specific employee IDs
-    return isAdminUser() || designation.includes('hr') || designation.includes('manager') || empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
+import { isAdminUser, isL3User } from '../utils/accessControl.js';
 
 export const getSidebarHTML = () => {
     const isAdmin = isAdminUser();

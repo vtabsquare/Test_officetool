@@ -1,25 +1,4 @@
-import { state } from './state.js';
-
-// Check if current user is admin
-const isAdminUser = () => {
-  const empId = String(state.user?.id || '').trim().toUpperCase();
-  const email = String(state.user?.email || '').trim().toLowerCase();
-  const flag = !!state.user?.is_admin;
-  return flag || empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
-
-const isManagerOrAdmin = () => {
-  const managerFlag = !!state.user?.is_manager;
-  return isAdminUser() || managerFlag;
-};
-
-// Check if current user is L3 level (HR/Admin with onboarding access)
-const isL3User = () => {
-  const designation = String(state.user?.designation || '').trim().toLowerCase();
-  const empId = String(state.user?.id || '').trim().toUpperCase();
-  const email = String(state.user?.email || '').trim().toLowerCase();
-  return isAdminUser() || designation.includes('hr') || designation.includes('manager') || empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
+import { isAdminUser, isManagerOrAdmin, isL3User } from './utils/accessControl.js';
 
 // Access denied page for non-admin users
 const renderAccessDenied = (redirectPath = '#/') => {

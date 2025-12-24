@@ -21,6 +21,7 @@ import { handleInboxRejectLeave, handleAttendanceRejectReport, handleCompOffReje
 import { updateNotificationBadge, handleNotificationBellClick, startNotificationPolling } from './features/notificationApi.js';
 import { connectSocket } from './src/socket.js';
 import { initAiAssistant } from './components/AiAssistant.js';
+import { deriveRoleInfo } from './utils/accessHelpers.js';
 
 const API_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL)
@@ -421,7 +422,20 @@ const init = async () => {
       const parsed = JSON.parse(saved);
       if (parsed && parsed.authenticated && parsed.user) {
         state.authenticated = true;
-        state.user = parsed.user;
+        const { role, isAdmin, isManager } = deriveRoleInfo({
+          ...parsed.user,
+          designation: parsed.user?.designation,
+        });
+        state.user = {
+          ...parsed.user,
+          role,
+          access_level: role,
+          is_admin: isAdmin,
+          is_manager: isManager,
+        };
+        try {
+          localStorage.setItem('role', role);
+        } catch {}
         // If saved id looks like an email or not canonical, try to resolve employee_id once
         const idStr = String(state.user.id || '');
         const looksEmail = idStr.includes('@');

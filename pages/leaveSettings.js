@@ -3,15 +3,9 @@ import { state } from '../state.js';
 import { getPageContentHTML } from '../utils.js';
 import { listEmployees } from '../features/employeeApi.js';
 import { renderModal, closeModal } from '../components/modal.js';
+import { isAdminUser } from '../utils/accessControl.js';
 
 const API_BASE = 'http://localhost:5000/api';
-
-// Check if current user is admin (EMP001)
-const isAdminUser = () => {
-    const empId = String(state.user?.id || '').trim().toUpperCase();
-    const email = String(state.user?.email || '').trim().toLowerCase();
-    return empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
 
 // Leave allocation types configuration (defaults)
 const LEAVE_ALLOCATION_TYPES = [

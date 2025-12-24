@@ -6,13 +6,7 @@ import { getHolidays } from '../features/holidaysApi.js';
 import { fetchMonthlyAttendance } from '../features/attendanceApi.js';
 import { state } from '../state.js';
 import { cachedFetch, TTL, getPageState, cachePageState } from '../features/cache.js';
-
-const isAdminUser = () => {
-    const empId = String(state.user?.id || '').trim().toUpperCase();
-    const email = String(state.user?.email || '').trim().toLowerCase();
-    const flag = !!state.user?.is_admin;
-    return flag || empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
+import { isAdminUser } from '../utils/accessControl.js';
 
 const formatDate = (dateStr) => {
     if (!dateStr) return '';

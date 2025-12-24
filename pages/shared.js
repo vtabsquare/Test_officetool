@@ -1,5 +1,6 @@
 // shared.js - Shared Inbox page
 import { state } from '../state.js';
+import { isAdminUser, isManagerOrAdmin } from '../utils/accessControl.js';
 import { getPageContentHTML } from '../utils.js';
 import { renderModal, closeModal } from '../components/modal.js';
 import { fetchEmployeeLeaves, approveLeave, rejectLeave } from '../features/leaveApi.js';
@@ -14,18 +15,9 @@ import { cachedFetch, TTL } from '../features/cache.js';
 let currentInboxTab = 'awaiting';
 let currentInboxCategory = 'leaves';
 
-// Check if current user is admin (EMP001)
-const isAdminUser = () => {
-    const empId = String(state.user?.id || '').trim().toUpperCase();
-    const email = String(state.user?.email || '').trim().toLowerCase();
-    return empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
-
 const canManageMyTimesheetRows = () => {
     if (isAdminUser()) return true;
-    const role = String(state.user?.role || '').trim().toUpperCase();
-    if (role === 'L3' || role === 'L2' || role === 'ADMIN') return true;
-    if (state.user?.is_manager) return true;
+    if (isManagerOrAdmin()) return true;
     const designation = String(state.user?.designation || '').trim().toLowerCase();
     return designation.includes('manager');
 };

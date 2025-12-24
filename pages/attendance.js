@@ -4,19 +4,13 @@ import { getHolidays } from '../features/holidaysApi.js';
 import { renderModal, closeModal } from '../components/modal.js';
 import { API_BASE_URL } from '../config.js';
 import { clearCacheByPrefix } from '../features/cache.js';
-
-// Check if current user is admin (EMP001 or bala.t@vtab.com)
-const isAdminUser = () => {
-    const empId = String(state.user?.id || '').trim().toUpperCase();
-    const email = String(state.user?.email || '').trim().toLowerCase();
-    return empId === 'EMP001' || email === 'bala.t@vtab.com';
-};
+import { isAdminUser, isManagerOrAdmin } from '../utils/accessControl.js';
 
 const isManagerUserAttendance = () => {
     try {
+        if (isManagerOrAdmin()) return true;
         const desig = String(state.user?.designation || '').toLowerCase();
-        const role = String(state.user?.role || '').toLowerCase();
-        return desig.includes('manager') || role === 'l2';
+        return desig.includes('manager');
     } catch { return false; }
 };
 

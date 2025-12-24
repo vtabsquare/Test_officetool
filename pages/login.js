@@ -425,6 +425,7 @@
 // import { listEmployees } from '../features/employeeApi.js';
 // import { startNotificationPolling } from '../features/notificationApi.js';
 import { API_BASE_URL } from '../config.js';
+import { deriveRoleInfo } from '../utils/accessHelpers.js';
 
 // export const renderLoginPage = () => {
 //     const content = `
@@ -1609,6 +1610,10 @@ export const renderLoginPage = () => {
       const u = data.user || {};
       const displayName = u.name || u.full_name || u.username || email;
       const empId = u.employee_id || u.id || u.emp_id || u.email || email;
+      const { role, isAdmin, isManager } = deriveRoleInfo({
+        ...u,
+        designation: u.designation,
+      });
       state.user = {
         name: displayName,
         initials:
@@ -1621,7 +1626,10 @@ export const renderLoginPage = () => {
         id: empId,
         email,
         designation: u.designation || "",
-        is_admin: !!u.is_admin,
+        role,
+        access_level: role,
+        is_admin: isAdmin,
+        is_manager: isManager,
       };
       state.authenticated = true;
       try {
@@ -1629,6 +1637,7 @@ export const renderLoginPage = () => {
           "auth",
           JSON.stringify({ authenticated: true, user: state.user })
         );
+        localStorage.setItem("role", role);
       } catch {}
 
       try {
@@ -1780,6 +1789,10 @@ export const renderLoginPage = () => {
             const displayName = u.name || u.full_name || u.username || username;
             const empId =
               u.employee_id || u.id || u.emp_id || u.email || username;
+            const { role, isAdmin, isManager } = deriveRoleInfo({
+              ...u,
+              designation: u.designation,
+            });
             state.user = {
               name: displayName,
               initials:
@@ -1792,7 +1805,10 @@ export const renderLoginPage = () => {
               id: empId,
               email: username,
               designation: u.designation || "",
-              is_admin: !!u.is_admin,
+              role,
+              access_level: role,
+              is_admin: isAdmin,
+              is_manager: isManager,
             };
             state.authenticated = true;
             try {
@@ -1800,6 +1816,7 @@ export const renderLoginPage = () => {
                 "auth",
                 JSON.stringify({ authenticated: true, user: state.user })
               );
+              localStorage.setItem("role", role);
             } catch {}
             startNotificationPolling();
             setTimeout(() => {

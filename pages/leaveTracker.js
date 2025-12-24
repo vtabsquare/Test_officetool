@@ -19,6 +19,7 @@ import {
   updateNotificationBadge,
 } from "../features/notificationApi.js";
 import { showLeaveApplicationToast } from "../components/toast.js";
+import { isAdminUser } from "../utils/accessControl.js";
 
 let leaveCurrentPage = 1;
 const LEAVE_PAGE_SIZE = 10;
@@ -39,17 +40,6 @@ const runWithConcurrency = async (items, limit, worker) => {
     });
   await Promise.all(runners);
   return results;
-};
-
-// Check if current user is admin (EMP001 or bala.t@vtab.com)
-const isAdminUser = () => {
-  const empId = String(state.user?.id || "")
-    .trim()
-    .toUpperCase();
-  const email = String(state.user?.email || "")
-    .trim()
-    .toLowerCase();
-  return empId === "EMP001" || email === "bala.t@vtab.com";
 };
 
 // Resolve the current user's employee_id robustly

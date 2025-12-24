@@ -2160,6 +2160,13 @@ def verify_reset_token(token):
         return None
 
 
+def _normalize_access_level(value):
+    level = (value or "").strip().upper()
+    if level in ("L1", "L2", "L3"):
+        return level
+    return "L1"
+
+
 @app.route("/api/login", methods=["POST"])
 def login():
     try:
@@ -2196,6 +2203,7 @@ def login():
         status = record.get("crc6f_user_status", "Active")
         attempts = int(record.get("crc6f_loginattempts") or 0)
         stored_hash = record.get("crc6f_password") or ""
+        access_level = _normalize_access_level(record.get("crc6f_accesslevel"))
 
         # -------------------------
         # CHECK ACCOUNT LOCKED
@@ -2246,7 +2254,8 @@ def login():
             # -------------------------
             employee_id_value = None
             employee_designation = None
-            is_admin = False
+            is_admin_flag = access_level == "L3"
+            is_manager_flag = access_level in ("L2", "L3")
 
             try:
                 entity_set = get_employee_entity_set(token)
@@ -2276,10 +2285,11 @@ def login():
                             employee_id_value = emp.get(id_field)
                             employee_designation = emp.get(desig_field)
 
-                            # set admin flag
-                            d = (employee_designation or "").lower()
-                            if "admin" in d or "manager" in d:
-                                is_admin = True
+                            designation_lower = (employee_designation or "").lower()
+                            if "admin" in designation_lower:
+                                is_admin_flag = True
+                            if "manager" in designation_lower:
+                                is_manager_flag = True
 
             except Exception as e:
                 print("ACCESS LOGIC ERROR:", e)
@@ -2293,7 +2303,10 @@ def login():
                     "name": record.get("crc6f_employeename"),
                     "employee_id": employee_id_value,
                     "designation": employee_designation,
-                    "is_admin": is_admin
+                    "access_level": access_level,
+                    "role": access_level,
+                    "is_admin": is_admin_flag,
+                    "is_manager": is_manager_flag
                 }
             }), 200
 
