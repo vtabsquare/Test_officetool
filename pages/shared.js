@@ -635,6 +635,7 @@ export const renderMyTasksPage = async () => {
             const projectName = proj.name || (t.project_id || '');
             const isRunning = active && active.task_guid === t.guid && !active.paused;
             const isPaused = active && active.task_guid === t.guid && active.paused;
+
             let runSecs = getPersistedSecs(t.guid);
             if (active && active.task_guid === t.guid) {
                 runSecs = (active.accumulated || 0);
@@ -646,17 +647,35 @@ export const renderMyTasksPage = async () => {
             const timeText = (isRunning || isPaused || runSecs > 0) ? `<span class="running" style="color:${color}; font-weight:600;">${fmt(runSecs)}</span>` : '-';
             const toggleIcon = isRunning ? 'fa-pause' : 'fa-play';
             const toggleTitle = isRunning ? 'Pause' : (isPaused ? 'Resume' : 'Start');
+            const canNavigate = t.project_id && t.board_id;
+            const taskLabel = `
+              <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fa-regular fa-calendar"></i>
+                <div>
+                  ${canNavigate
+                    ? `<button type="button"
+                               class="task-link"
+                               data-project="${encodeURIComponent(t.project_id)}"
+                               data-board="${encodeURIComponent(t.board_id)}"
+                               title="Open project board">
+                          ${t.task_name || ''}
+                       </button>`
+                    : `<div style="font-weight:600;">${t.task_name || ''}</div>`}
+                  <div style="color:#64748b; font-size:12px;">${t.task_id || ''}</div>
+                </div>
+              </div>`;
             return `
             <tr data-guid="${t.guid}">
               <td class="actions-cell" style="width:50px; text-align:left;">
                 <button class="action-btn toggle-timer" title="${toggleTitle}"><i class="fa-solid ${toggleIcon}"></i></button>
               </td>
-              <td><div style="display:flex; align-items:center; gap:10px;"><i class="fa-regular fa-calendar"></i><div><div style="font-weight:600;">${t.task_name || ''}</div><div style="color:#64748b; font-size:12px;">${t.task_id || ''}</div></div></div></td>
+              <td>${taskLabel}</td>
               <td>${projectName}</td>
               <td>${clientName}</td>
               <td><span class="status-badge ${String(t.task_status || '').toLowerCase()}">${t.task_status || ''}</span></td>
               <td>${t.due_date || '-'}</td>
               <td>${t.task_priority || '-'}</td>
+
               <td class="tt-time" style="color:#d63031; font-weight:600;">${timeText}</td>
             </tr>`;
         }).join('');
@@ -722,6 +741,15 @@ export const renderMyTasksPage = async () => {
                 if (!t) return;
                 // Always toggle (start/pause/resume) - never save or navigate
                 toggleTimer(t);
+            });
+        });
+
+        document.querySelectorAll('.task-link').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const projectId = e.currentTarget.getAttribute('data-project');
+                const boardId = e.currentTarget.getAttribute('data-board');
+                if (!projectId || !boardId) return;
+                window.location.hash = `#/time-projects?id=${projectId}&tab=crm&board=${boardId}`;
             });
         });
 

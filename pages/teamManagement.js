@@ -942,35 +942,46 @@ export const renderTeamManagementPage = async (page = 1) => {
         .tm-view-toggle {
           display: inline-flex;
           align-items: center;
-          justify-content: flex-end;
-          gap: 4px;
+          gap: 6px;
+          padding: 4px;
+          border-radius: 999px;
+          background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(14,165,233,0.08));
+          border: 1px solid rgba(99,102,241,0.35);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), 0 8px 22px rgba(15,23,42,0.12);
           flex-wrap: nowrap;
-          max-width: 100%;
-          flex-shrink: 1;
         }
         .view-toggle-btn {
-          border: 1px solid #cbd5e1;
-          background: var(--surface-color);
+          border: none;
+          background: transparent;
           color: var(--text-secondary);
           border-radius: 999px;
-          padding: 3px 8px;
-          font-size: 0.68rem;
+          padding: 6px 16px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 6px;
           cursor: pointer;
-          transition: all 0.15s ease;
-          min-width: 0;
-          height: 26px;
+          transition: all 0.18s ease;
+          min-width: 86px;
+          height: 34px;
+        }
+        .view-toggle-btn:hover {
+          color: var(--text-primary);
+        }
+        .view-toggle-btn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(99,102,241,0.35);
         }
         .view-toggle-btn.active {
-          background: var(--primary-color);
-          border-color: var(--primary-color);
+          background: linear-gradient(135deg, #4f46e5, #6366f1);
           color: #ffffff;
-          box-shadow: 0 0 0 1px rgba(59,130,246,0.5);
+          box-shadow: 0 10px 20px rgba(79,70,229,0.35);
+          transform: translateY(-1px);
         }
         .view-toggle-btn i {
-          font-size: 0.7rem;
+          font-size: 0.75rem;
         }
 
         @media (max-width: 1024px) {
