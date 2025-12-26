@@ -3087,13 +3087,22 @@ def checkout():
             normalized_emp_id = format_employee_id(int(normalized_emp_id))
         key = normalized_emp_id
 
+        # Verify this employee has an active check-in
+        session = active_sessions.get(key)
+        if not session:
+            return jsonify({
+                "success": False,
+                "error": "No active check-in found. Please check in first.",
+            }), 400
+
+        # Use client time if available
+        local_now = _coerce_client_local_datetime(client_time, timezone_str) or datetime.now()
+        checkout_time_str = local_now.strftime("%H:%M:%S")
+
         # Log the check-out event with location
         event = log_login_event(normalized_emp_id, "check_out", request, location_data, client_time, timezone_str)
         _sync_login_activity_from_event(event)
 
-        session = active_sessions.get(key)
-        now = datetime.now()
-        
         # If no in-memory session, try to recover from Dataverse
         # This handles server restarts where active_sessions is cleared
         if not session:
@@ -3149,20 +3158,19 @@ def checkout():
                 "success": False,
                 "error": "No active check-in found. Please check in first.",
             }), 400
-        checkout_time_str = now.strftime("%H:%M:%S")
 
         # Calculate session duration in seconds
         try:
             if "checkin_datetime" in session:
                 checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
-                session_seconds = int((now - checkin_dt).total_seconds())
+                session_seconds = int((local_now - checkin_dt).total_seconds())
             elif "checkin_time" in session:
                 # Fallback for older sessions without datetime
                 checkin_time_str = session["checkin_time"]
                 checkin_dt = datetime.strptime(checkin_time_str, "%H:%M:%S").replace(
-                    year=now.year, month=now.month, day=now.day
+                    year=local_now.year, month=local_now.month, day=local_now.day
                 )
-                session_seconds = int((now - checkin_dt).total_seconds())
+                session_seconds = int((local_now - checkin_dt).total_seconds())
             else:
                 session_seconds = 0
         except Exception as time_err:
