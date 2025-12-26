@@ -26,6 +26,7 @@ from flask_mail import Mail, Message
 from mail_app import send_email
 from project_contributors import bp as contributors_bp
 from project_boards import bp as boards_bp
+from project_tasks import tasks_bp
 
 try:
     from zoneinfo import ZoneInfo
