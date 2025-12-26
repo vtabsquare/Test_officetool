@@ -2628,7 +2628,6 @@ def reset_attempts():
 
     return jsonify({"status": "success", "message": "Attempts reset"})
 
-
 @app.route("/api/login-accounts", methods=["GET"])
 def list_login_accounts():
     try:
@@ -2672,12 +2671,41 @@ def list_login_accounts():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/api/login-accounts/by-username", methods=["GET"])
+def get_login_account_by_username():
+    username = request.args.get("username", "").strip()
+    if not username:
+        return jsonify({"success": False, "error": "username query param is required"}), 400
+    try:
+        token = get_access_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "OData-MaxVersion": "4.0",
+            "OData-Version": "4.0",
+        }
+        record = _fetch_login_by_username(username, token, headers)
+        if not record:
+            return jsonify({"success": False, "error": "Login account not found"}), 404
+        item = {
+            "id": record.get("crc6f_hr_login_detailsid") or record.get("id"),
+            "username": record.get("crc6f_username") or "",
+            "employeeName": record.get("crc6f_employeename") or "",
+            "accessLevel": _normalize_access_level(record.get("crc6f_accesslevel")),
+            "lastLogin": record.get("crc6f_last_login"),
+            "loginAttempts": int(record.get("crc6f_loginattempts") or 0),
+            "userStatus": record.get("crc6f_user_status") or "",
+        }
+        return jsonify({"success": True, "item": item})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/login-accounts", methods=["POST"])
 def create_login_account():
     try:
         data = request.get_json(force=True) or {}
         username = (data.get("username") or "").strip()
+
         if not username:
             return jsonify({"success": False, "error": "Username is required"}), 400
         token = get_access_token()

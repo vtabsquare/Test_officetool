@@ -28,6 +28,49 @@ const API_BASE_URL =
     ? import.meta.env.VITE_API_BASE_URL
     : 'http://localhost:5000';
 
+const normalizeApiBase = () => String(API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+
+const syncAccessLevelFromServer = async () => {
+  const username = String(state.user?.email || state.user?.username || '').trim();
+  if (!username) return;
+  try {
+    const res = await fetch(
+      `${normalizeApiBase()}/api/login-accounts/by-username?username=${encodeURIComponent(username)}`
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const accessLevel = data?.item?.accessLevel;
+    if (!data?.success || !accessLevel) return;
+    const { role, isAdmin, isManager } = deriveRoleInfo({
+      ...state.user,
+      access_level: accessLevel,
+      role: accessLevel,
+    });
+    const nextUser = {
+      ...state.user,
+      role,
+      access_level: role,
+      is_admin: isAdmin,
+      is_manager: isManager,
+    };
+    const changed =
+      state.user.role !== nextUser.role ||
+      state.user.is_admin !== nextUser.is_admin ||
+      state.user.is_manager !== nextUser.is_manager;
+    state.user = nextUser;
+    if (changed) {
+      try {
+        localStorage.setItem('auth', JSON.stringify({ authenticated: true, user: state.user }));
+      } catch {}
+      try {
+        localStorage.setItem('role', role);
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('Failed to sync access level with server', err);
+  }
+};
+
 if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
@@ -455,11 +498,15 @@ const init = async () => {
         }
       }
     }
+    if (state.authenticated) {
+      await syncAccessLevelFromServer();
+    }
   } catch { }
   if (!state.authenticated) {
     window.location.href = '/login.html';
     return;
   }
+
   // Expose state globally for compatibility
   window.state = state;
 
