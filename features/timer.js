@@ -381,6 +381,10 @@ const ensureTimerStatusPolling = () => {
 
 export const loadTimerState = async () => {
     let uid = String(state.user.id || '').toUpperCase();
+    if (uid) {
+        ensureTimerStatusPolling();
+    }
+
     let storageKey = null;
     let raw = null;
     try {
@@ -395,6 +399,7 @@ export const loadTimerState = async () => {
     } catch {
         raw = null;
     }
+
     if (!raw) {
         await restoreTimerFromBackend(uid, null, false);
         return;
