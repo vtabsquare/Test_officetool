@@ -2307,6 +2307,7 @@ def checkin():
                 "checkin_timestamp": checkin_timestamp,
                 "attendance_id": random_attendance_id,
                 "local_date": formatted_date,
+                "base_seconds": 0,
             }
 
             print(f"[OK] SUCCESS! Record ID: {record_id}")
@@ -3034,12 +3035,11 @@ def delete_login_account(login_id):
 #                     email_alts = ['crc6f_officialemail', 'crc6f_emailaddress', 'emailaddress', 'officialemail', 'crc6f_mail', 'crc6f_quotahours']
 #                     # Attempt direct match first (if primary field present)
 #                     safe_email = (username or '').replace("'", "''")
-#                     select_parts = [p for p in [id_field, email_field, desig_field] if p]
-#                     # add alternates to $select so we can scan
-#                     for alt in email_alts:
-#                         if alt and alt not in select_parts:
-#                             select_parts.append(alt)
-#                     url_emp = f"{BASE_URL}/{entity_set}?$top=5&$select={','.join(select_parts)}&$filter={email_field} eq '{safe_email}'" if email_field else None
+#                     select_cols = [id_field, email_field]
+#                     if desig_field:
+#                         select_cols.append(desig_field)
+
+#                     url_emp = f"{BASE_URL}/{entity_set}?$top=1&$select={','.join(select_cols)}&$filter={email_field} eq '{safe_email}'" if email_field else None
 #                     emp_row = None
 #                     if url_emp:
 #                         r1 = requests.get(url_emp, headers=headers)
@@ -3049,7 +3049,7 @@ def delete_login_account(login_id):
 #                                 emp_row = vals[0]
 #                     # Fallback: fetch a page and scan all possible email fields case-insensitively
 #                     if not emp_row and id_field:
-#                         url_scan = f"{BASE_URL}/{entity_set}?$top=200&$select={','.join(select_parts)}"
+#                         url_scan = f"{BASE_URL}/{entity_set}?$top=200&$select={','.join(select_cols)}"
 #                         r2 = requests.get(url_scan, headers=headers)
 #                         if r2.status_code == 200:
 #                             want = (username or '').strip().lower()
@@ -3335,28 +3335,33 @@ def checkout():
             }), 400
 
         # Calculate session duration in seconds (fallback to checkin_timestamp if available)
+        # Normalize local_now to a naive datetime so we can subtract even if stored values are naive
+        local_now_naive = local_now.replace(tzinfo=None) if getattr(local_now, "tzinfo", None) else local_now
         session_seconds = 0
         try:
             candidates = []
             if "checkin_datetime" in session:
                 try:
                     checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
-                    candidates.append(int((local_now - checkin_dt).total_seconds()))
+                    if checkin_dt.tzinfo:
+                        candidates.append(int((local_now - checkin_dt).total_seconds()))
+                    else:
+                        candidates.append(int((local_now_naive - checkin_dt).total_seconds()))
                 except Exception:
                     pass
             if "checkin_time" in session:
                 try:
                     checkin_time_str = session["checkin_time"]
                     checkin_dt = datetime.strptime(checkin_time_str, "%H:%M:%S").replace(
-                        year=local_now.year, month=local_now.month, day=local_now.day
+                        year=local_now_naive.year, month=local_now_naive.month, day=local_now_naive.day
                     )
-                    candidates.append(int((local_now - checkin_dt).total_seconds()))
+                    candidates.append(int((local_now_naive - checkin_dt).total_seconds()))
                 except Exception:
                     pass
             if "checkin_timestamp" in session:
                 try:
                     ts_dt = datetime.fromtimestamp(int(session["checkin_timestamp"]) / 1000.0)
-                    candidates.append(int((local_now - ts_dt).total_seconds()))
+                    candidates.append(int((local_now_naive - ts_dt).total_seconds()))
                 except Exception:
                     pass
             # Use the maximum plausible candidate to avoid undercounting
@@ -3466,18 +3471,27 @@ def checkout():
 
         # Emit socket event for real-time multi-device sync
         try:
-            safe_total_seconds = int(total_seconds_today or 0)
-            if safe_total_seconds < 0:
-                safe_total_seconds = 0
-            # Guard against undercount: include session_seconds and any base_seconds on the session
+            totals = []
             try:
-                safe_total_seconds = max(
-                    safe_total_seconds,
-                    int(session_seconds or 0),
-                    int(session.get("base_seconds") or 0),
-                )
+                totals.append(int(total_seconds_today or 0))
             except Exception:
                 pass
+            try:
+                totals.append(int(session_seconds or 0))
+            except Exception:
+                pass
+            try:
+                base_sec = int(session.get("base_seconds") or 0)
+                totals.append(base_sec)
+                # If we have base seconds from earlier sessions, add this session's duration too
+                totals.append(base_sec + int(session_seconds or 0))
+            except Exception:
+                pass
+
+            if totals:
+                safe_total_seconds = max(0, max(totals))
+            else:
+                safe_total_seconds = 0
         except Exception:
             safe_total_seconds = 0
 
