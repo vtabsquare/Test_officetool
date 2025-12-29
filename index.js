@@ -219,6 +219,13 @@ const renderProfileOverlay = (profile) => {
           avatarEl.textContent = '';
           // persist to state and localStorage for reuse
           state.user = { ...(state.user || {}), avatarUrl: dataUrl };
+          // Update header avatar immediately
+          const headerAvatar = document.querySelector('#user-profile .user-avatar');
+          if (headerAvatar) {
+            headerAvatar.classList.add('has-photo');
+            headerAvatar.style.backgroundImage = `url('${dataUrl}')`;
+            headerAvatar.textContent = '';
+          }
           try {
             const authRaw = localStorage.getItem('auth');
             if (authRaw) {
