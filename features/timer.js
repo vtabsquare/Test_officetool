@@ -371,6 +371,7 @@ export const updateTimerButton = () => {
     if (timerBtn) {
         if (state.timer.isRunning) {
             timerBtn.classList.remove('check-in');
+
             timerBtn.classList.add('check-out');
             timerBtn.innerHTML = `<span id="timer-display"></span> CHECK OUT`;
         } else {
@@ -383,47 +384,30 @@ export const updateTimerButton = () => {
 };
 
 export const loadTimerState = async () => {
-    let uid = String(state.user.id || '').toUpperCase();
-    let storageKey = null;
-    let raw = null;
-    try {
-        if (uid) {
-            storageKey = `timerState_${uid}`;
-            raw = localStorage.getItem(storageKey);
-        }
-        if (!raw) {
-            storageKey = 'timerState';
-            raw = localStorage.getItem('timerState');
-        }
-    } catch {
-        raw = null;
-    }
+    // Always prefer authoritative backend state if available
+    const uid = String(state.user.id || '').toUpperCase();
+    const storageKey = uid ? `timerState_${uid}` : 'timerState';
+    const baseUrl = (API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
-    // If no local state, check server for active session (new device scenario)
-    if (!raw && uid) {
+    // 1) Backend-first: if backend says we're checked in, restore and return
+    if (uid) {
         try {
-            console.log(`🔍 No local state, checking server for active session: ${uid}`);
-            const base = (API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
-            const response = await fetch(`${base}/api/status/${uid}`);
+            const response = await fetch(`${baseUrl}/api/status/${uid}`);
             const statusData = await response.json();
-
             if (statusData.checked_in) {
                 const backendElapsed = typeof statusData.elapsed_seconds === 'number' ? statusData.elapsed_seconds : 0;
                 const backendTotal = typeof statusData.total_seconds_today === 'number' ? statusData.total_seconds_today : 0;
                 const baseFromBackend = Math.max(0, backendTotal - backendElapsed);
-
-                // Calculate start time from server elapsed
                 const syncedStartTime = Date.now() - (backendElapsed * 1000);
 
                 state.timer.isRunning = true;
                 state.timer.startTime = syncedStartTime;
                 state.timer.lastDuration = baseFromBackend;
 
-                // Save to localStorage
                 const today = new Date();
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                 try {
-                    localStorage.setItem(`timerState_${uid}`, JSON.stringify({
+                    localStorage.setItem(storageKey, JSON.stringify({
                         isRunning: true,
                         startTime: syncedStartTime,
                         date: todayStr,
@@ -431,15 +415,26 @@ export const loadTimerState = async () => {
                         durationSeconds: baseFromBackend,
                     }));
                 } catch {}
-
+                if (state.timer.intervalId) clearInterval(state.timer.intervalId);
                 state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
-                console.log(`✅ Timer synced from server on new device (elapsed: ${backendElapsed}s)`);
+                updateTimerDisplay();
+                console.log(`✅ Timer restored from backend (elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
                 return;
+            } else {
+                // Backend says no active session; clear any stale local cache silently
+                try { localStorage.removeItem(storageKey); } catch {}
             }
         } catch (err) {
-            console.warn('Failed to check server for active session:', err);
+            console.warn('Failed to fetch backend status during loadTimerState:', err);
         }
-        return;
+    }
+
+    // 2) Fallback to local cache if backend unreachable
+    let raw = null;
+    try {
+        raw = localStorage.getItem(storageKey);
+    } catch {
+        raw = null;
     }
 
     if (!raw) return;
@@ -448,7 +443,7 @@ export const loadTimerState = async () => {
     try {
         parsed = JSON.parse(raw);
     } catch {
-        try { if (storageKey) localStorage.removeItem(storageKey); } catch {}
+        try { localStorage.removeItem(storageKey); } catch {}
         return;
     }
 
@@ -464,77 +459,19 @@ export const loadTimerState = async () => {
         state.timer.isRunning = false;
         state.timer.startTime = null;
         state.timer.lastDuration = 0;
-        try { if (storageKey) localStorage.removeItem(storageKey); } catch {}
+        try { localStorage.removeItem(storageKey); } catch {}
         return;
     }
 
     if (mode === 'running' && startTime) {
-        if (!uid) return;
-        try {
-            console.log(`🔍 Verifying check-in status for: ${uid}`);
-            const base = (API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
-            const response = await fetch(`${base}/api/status/${uid}`);
-            const statusData = await response.json();
-
-            if (statusData.checked_in) {
-                const backendTotal =
-                    typeof statusData.total_seconds_today === 'number'
-                        ? statusData.total_seconds_today
-                        : null;
-                const backendElapsed =
-                    typeof statusData.elapsed_seconds === 'number'
-                        ? statusData.elapsed_seconds
-                        : null;
-
-                // Derive base (past) seconds from backend by removing active elapsed
-                let baseFromBackend = null;
-                if (backendTotal !== null && backendElapsed !== null) {
-                    baseFromBackend = Math.max(0, backendTotal - backendElapsed);
-                }
-
-                // Calculate server-synced start time from elapsed seconds
-                // This ensures timer is consistent across devices
-                let syncedStartTime = startTime;
-                if (backendElapsed !== null && backendElapsed > 0) {
-                    // Server knows how long ago check-in happened
-                    syncedStartTime = Date.now() - (backendElapsed * 1000);
-                }
-
-                state.timer.isRunning = true;
-                state.timer.startTime = syncedStartTime;
-                // Prefer backend-derived base seconds; fall back to local cached duration
-                state.timer.lastDuration =
-                    baseFromBackend !== null ? baseFromBackend : (durationSeconds || 0);
-                
-                // Update localStorage with synced values
-                try {
-                    localStorage.setItem(storageKey, JSON.stringify({
-                        isRunning: true,
-                        startTime: syncedStartTime,
-                        date: todayStr,
-                        mode: 'running',
-                        durationSeconds: state.timer.lastDuration,
-                    }));
-                } catch {}
-
-                state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
-                console.log(`✅ Timer state restored - synced from server (elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
-            } else {
-                state.timer.isRunning = false;
-                state.timer.startTime = null;
-                state.timer.lastDuration = 0;
-                try { if (storageKey) localStorage.removeItem(storageKey); } catch {}
-                console.log('⚠️ Timer state cleared - user is not checked in');
-                alert('Your previous check-in session has expired. Please check in again.');
-            }
-        } catch (err) {
-            console.warn('Failed to verify check-in status:', err);
-            state.timer.isRunning = false;
-            state.timer.startTime = null;
-            state.timer.lastDuration = 0;
-            try { if (storageKey) localStorage.removeItem(storageKey); } catch {}
-            console.log('⚠️ Timer state cleared due to verification failure');
-        }
+        // With backend unreachable, fall back to local running state
+        state.timer.isRunning = true;
+        state.timer.startTime = startTime;
+        state.timer.lastDuration = durationSeconds || 0;
+        if (state.timer.intervalId) clearInterval(state.timer.intervalId);
+        state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
+        updateTimerDisplay();
+        console.log('ℹ️ Timer restored from local cache (offline fallback)');
     } else if (mode === 'stopped' && durationSeconds > 0) {
         state.timer.isRunning = false;
         state.timer.startTime = null;

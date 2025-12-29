@@ -148,6 +148,56 @@ const handleNavClick = (e) => {
   }
 };
 
+const closeProfilePanel = () => {
+  const overlay = document.getElementById('profile-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+};
+
+const openProfilePanel = () => {
+  const existing = document.getElementById('profile-overlay');
+  if (existing) {
+    existing.classList.add('open');
+    return;
+  }
+
+  const user = state?.user || {};
+  const overlay = document.createElement('div');
+  overlay.id = 'profile-overlay';
+  overlay.className = 'profile-overlay open';
+  overlay.innerHTML = `
+    <div class="profile-panel">
+      <button class="profile-close-btn" aria-label="Close profile panel">&times;</button>
+      <div class="profile-header">
+        <div class="profile-avatar ${user.avatarUrl ? 'has-photo' : ''}" ${user.avatarUrl ? `style="background-image:url('${user.avatarUrl}')"` : ''}>${user.initials || ''}</div>
+        <div>
+          <div class="profile-name">${user.name || 'User'}</div>
+          ${user.designation ? `<div class="profile-role">${user.designation}</div>` : ''}
+          ${user.id ? `<div class="profile-id">${user.id}</div>` : ''}
+        </div>
+      </div>
+      <div class="profile-body">
+        ${user.email ? `<div class="profile-field"><span>Email</span><strong>${user.email}</strong></div>` : ''}
+        ${user.phone ? `<div class="profile-field"><span>Phone</span><strong>${user.phone}</strong></div>` : ''}
+      </div>
+      <div class="profile-actions">
+        <button id="profile-close-btn" class="btn btn-secondary" style="width:100%;">Close</button>
+      </div>
+    </div>
+  `;
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'profile-overlay') {
+      closeProfilePanel();
+    }
+  });
+  overlay.querySelector('.profile-close-btn')?.addEventListener('click', closeProfilePanel);
+  overlay.querySelector('#profile-close-btn')?.addEventListener('click', closeProfilePanel);
+
+  document.body.appendChild(overlay);
+};
+
 const setupRealtimeCallClient = () => {
   try {
     const user = (state && state.user) || (window.state && window.state.user) || {};
