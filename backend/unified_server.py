@@ -3878,6 +3878,16 @@ def get_status(employee_id):
                 attendance_id = session.get("attendance_id")
                 base_seconds = int(session.get("base_seconds") or 0)
 
+                # If we somehow have no checkin_time at all, set it to now for the day
+                if not session.get("checkin_time"):
+                    try:
+                        now = datetime.now()
+                        session["checkin_time"] = now.strftime("%H:%M:%S")
+                        session["checkin_datetime"] = now.isoformat()
+                        checkin_time = session["checkin_time"]
+                    except Exception:
+                        pass
+
                 # Ensure we always have a durable checkin_timestamp to drive elapsed
                 if session.get("checkin_timestamp") is None:
                     # Try to pull from login activity durable seconds
