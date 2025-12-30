@@ -3673,9 +3673,13 @@ def get_status(employee_id):
             normalized_emp_id = format_employee_id(int(normalized_emp_id))
         key = normalized_emp_id
 
+        # Running totals baseline for today
+        total_seconds_today = 0
+
         # Try to recover session from Dataverse if not in memory
         # This handles server restarts
         if key not in active_sessions:
+
             try:
                 from datetime import date as _date
                 formatted_date = _date.today().isoformat()
