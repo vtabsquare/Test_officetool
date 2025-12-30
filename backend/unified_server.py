@@ -3782,6 +3782,16 @@ def get_status(employee_id):
                     # Fallback to datetime parse
                     checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
                     elapsed = int((datetime.now() - checkin_dt).total_seconds())
+                if elapsed <= 0 and session.get("checkin_time"):
+                    # Final fallback: derive from today's date + checkin_time (hh:mm:ss)
+                    try:
+                        ct_str = session["checkin_time"]
+                        ct_dt = datetime.strptime(ct_str, "%H:%M:%S").replace(
+                            year=datetime.now().year, month=datetime.now().month, day=datetime.now().day
+                        )
+                        elapsed = int((datetime.now() - ct_dt).total_seconds())
+                    except Exception:
+                        pass
                 if elapsed < 0:
                     elapsed = 0
             except Exception as e:

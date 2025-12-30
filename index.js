@@ -31,13 +31,45 @@ const API_BASE_URL =
 
 const normalizeApiBase = () => String(API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
-// Minimal theme initializer (prevents runtime errors when theme helpers are absent)
+const THEME_STORAGE_KEY = 'theme';
+
+const applyAppTheme = (theme) => {
+  const body = document.body;
+  body.classList.toggle('dark-theme', theme === 'dark');
+  body.classList.toggle('sunset-theme', theme === 'sunset');
+  body.setAttribute('data-theme', theme);
+  const toggle = document.getElementById('theme-toggle');
+  if (toggle) {
+    const icon = toggle.querySelector('i');
+    if (icon) {
+      icon.classList.remove('fa-sun', 'fa-moon');
+      icon.classList.add(theme === 'dark' ? 'fa-moon' : 'fa-sun');
+    }
+  }
+};
+
 const initTheme = () => {
+  // Pick saved theme if present; default to light
+  let theme = 'light';
   try {
-    const body = document.body;
-    body.setAttribute('data-theme', 'light');
-    body.classList.remove('dark-theme', 'sunset-theme');
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === 'dark' || stored === 'light' || stored === 'sunset') {
+      theme = stored;
+    }
   } catch {}
+  applyAppTheme(theme);
+
+  const toggle = document.getElementById('theme-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const current = document.body.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyAppTheme(next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {}
+    });
+  }
 };
 
 const syncAccessLevelFromServer = async () => {
