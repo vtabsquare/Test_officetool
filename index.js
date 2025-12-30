@@ -32,11 +32,14 @@ const API_BASE_URL =
 const normalizeApiBase = () => String(API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const THEME_STORAGE_KEY = 'theme';
+const THEME_OVERRIDE_KEY = 'theme_override';
+let themeAutoTimer = null;
 
 const applyAppTheme = (theme) => {
   const body = document.body;
   body.classList.toggle('dark-theme', theme === 'dark');
   body.classList.toggle('sunset-theme', theme === 'sunset');
+
   body.setAttribute('data-theme', theme);
   const toggle = document.getElementById('theme-toggle');
   if (toggle) {
@@ -48,16 +51,47 @@ const applyAppTheme = (theme) => {
   }
 };
 
+const getTimeBasedTheme = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'light';     // Morning
+  if (hour >= 17 && hour < 20) return 'sunset';   // Evening (warm)
+  if (hour >= 20 || hour < 5) return 'dark';      // Night
+  return 'light';                                 // Afternoon default
+};
+
+const startAutoThemeScheduler = (overrideEnabled) => {
+  if (themeAutoTimer) {
+    clearInterval(themeAutoTimer);
+    themeAutoTimer = null;
+  }
+  if (overrideEnabled) return;
+  // Check every minute; switch immediately when crossing threshold
+  themeAutoTimer = setInterval(() => {
+    const next = getTimeBasedTheme();
+    const current = document.body.getAttribute('data-theme') || 'light';
+    if (next !== current) {
+      applyAppTheme(next);
+    }
+  }, 60 * 1000);
+};
+
 const initTheme = () => {
-  // Pick saved theme if present; default to light
+  // If user manually toggled, honor stored theme; else auto by time
   let theme = 'light';
+  let overrideEnabled = false;
   try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'dark' || stored === 'light' || stored === 'sunset') {
-      theme = stored;
+    const storedOverride = localStorage.getItem(THEME_OVERRIDE_KEY);
+    overrideEnabled = storedOverride === '1';
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (overrideEnabled && (storedTheme === 'dark' || storedTheme === 'light' || storedTheme === 'sunset')) {
+      theme = storedTheme;
+    } else {
+      theme = getTimeBasedTheme();
+      overrideEnabled = false;
     }
   } catch {}
   applyAppTheme(theme);
+  startAutoThemeScheduler(overrideEnabled);
 
   const toggle = document.getElementById('theme-toggle');
   if (toggle) {
@@ -67,7 +101,9 @@ const initTheme = () => {
       applyAppTheme(next);
       try {
         localStorage.setItem(THEME_STORAGE_KEY, next);
+        localStorage.setItem(THEME_OVERRIDE_KEY, '1');
       } catch {}
+      startAutoThemeScheduler(true);
     });
   }
 };
