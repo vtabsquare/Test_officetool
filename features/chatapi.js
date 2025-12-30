@@ -1,6 +1,14 @@
 // chatapi.js
 import { state } from "../state.js";
 
+const toDataUrl = (photo) => {
+  if (!photo || typeof photo !== "string") return null;
+  const trimmed = photo.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:")) return trimmed;
+  return `data:image/png;base64,${trimmed}`;
+};
+
 // ----------------------------
 // API BASE (FLASK BLUEPRINT)
 // ----------------------------
@@ -73,7 +81,7 @@ export async function searchEmployees(query) {
       name: emp.name,
       email: emp.email,
       avatar: emp.avatar || emp.name?.slice(0, 1)?.toUpperCase() || "U",
-      photo: emp.photo || null,
+      photo: toDataUrl(emp.photo) || null,
     }));
   } catch {
     return [];
@@ -93,7 +101,7 @@ export async function fetchAllEmployees() {
       name: emp.name,
       email: emp.email,
       avatar: emp.avatar || emp.name?.slice(0, 1)?.toUpperCase() || "U",
-      photo: emp.photo || null,
+      photo: toDataUrl(emp.photo) || null,
     }));
   } catch {
     return [];

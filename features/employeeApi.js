@@ -7,6 +7,14 @@ const BASE_URL = API_BASE_URL.replace(/\/$/, '');
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const EMP_DIRECTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+const toDataUrl = (photo) => {
+  if (!photo || typeof photo !== 'string') return null;
+  const trimmed = photo.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('data:')) return trimmed;
+  return `data:image/png;base64,${trimmed}`;
+};
+
 let allEmployeesCache = {
   data: null,
   fetchedAt: 0,
@@ -29,7 +37,10 @@ export async function listEmployees(page = 1, pageSize = 5) {
     throw new Error(data.error || 'Failed to fetch employees');
   }
   const shaped = {
-    items: data.employees || [],
+    items: (data.employees || []).map(e => ({
+      ...e,
+      photo: toDataUrl(e.photo || e.profile_picture)
+    })),
     total: typeof data.total === 'number' ? data.total : undefined,
     page: data.page || page,
     pageSize: data.pageSize || pageSize
@@ -74,7 +85,7 @@ export async function listAllEmployees(forceRefresh = false) {
 
   const employees = (data.employees || []).map(e => ({
     ...e,
-    photo: e.photo || e.profile_picture || null
+    photo: toDataUrl(e.photo || e.profile_picture)
   }));
   allEmployeesCache = { data: employees, fetchedAt: now };
   return employees;
@@ -92,7 +103,10 @@ export async function updateEmployee(employeeId, payload) {
   }
   try { if (state?.cache?.employees) state.cache.employees = {}; } catch { }
   allEmployeesCache = { data: null, fetchedAt: 0 };
-  return data.employee;
+  return {
+    ...data.employee,
+    photo: toDataUrl(data.employee?.photo || data.employee?.profile_picture)
+  };
 }
 
 export async function deleteEmployee(employeeId) {

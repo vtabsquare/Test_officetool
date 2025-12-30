@@ -28,6 +28,30 @@ const cleanDataUrl = (dataUrl) => {
     return raw && raw.trim() ? raw.trim() : undefined;
 };
 
+const normalizePhoto = (photo) => {
+    if (!photo || typeof photo !== 'string') return null;
+    const trimmed = photo.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('data:')) return trimmed;
+    return `data:image/png;base64,${trimmed}`;
+};
+
+const applyHeaderAvatar = () => {
+    const headerAvatar = document.querySelector('.user-profile .user-avatar');
+    if (!headerAvatar) return;
+    const photo = normalizePhoto(state.user?.avatarUrl);
+    const initials = state.user?.initials || (state.user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    if (photo) {
+        headerAvatar.classList.add('has-photo');
+        headerAvatar.style.backgroundImage = `url('${photo}')`;
+        headerAvatar.textContent = '';
+    } else {
+        headerAvatar.classList.remove('has-photo');
+        headerAvatar.style.backgroundImage = '';
+        headerAvatar.textContent = initials;
+    }
+};
+
 const initPhotoUploader = (initialPhoto = null) => {
     const input = document.getElementById('photo-input');
     const trigger = document.getElementById('upload-photo-btn');
@@ -186,7 +210,7 @@ export const renderEmployeesPage = async (filter = '', page = empCurrentPage) =>
             employmentType: 'Full-time',
             status: (e.active === true || e.active === 'true' || e.active === 1 || e.active === 'Active') ? 'Active' : 'Inactive',
             employeeFlag: e.employee_flag,
-            photo: e.photo || e.profile_picture || null
+            photo: normalizePhoto(e.photo || e.profile_picture)
         }));
 
         const totalCount = typeof total === 'number' ? total : undefined;
@@ -821,7 +845,7 @@ export const handleUpdateEmployee = (e) => {
         profile_picture: photoDraft.cleared ? null : cleanDataUrl(photoDraft.dataUrl)
     };
 
-    updateEmployee(employee_id, payload).then(() => {
+    updateEmployee(employee_id, payload).then((updated) => {
         // Update local cache
         const idx = state.employees.findIndex(x => x.id === employee_id);
         if (idx >= 0) {
@@ -835,8 +859,13 @@ export const handleUpdateEmployee = (e) => {
                 department: payload.department,
                 status: payload.active ? 'Active' : 'Inactive',
                 employeeFlag: payload.employee_flag || state.employees[idx].employeeFlag,
-                photo: photoDraft.cleared ? null : (photoDraft.dataUrl || state.employees[idx].photo || null)
+                photo: normalizePhoto(photoDraft.cleared ? null : (photoDraft.dataUrl || updated?.photo || state.employees[idx].photo || null))
             };
+        }
+        // If the edited employee is the logged-in user, update header avatar
+        if (state.user && (state.user.id === employee_id || state.user.employee_id === employee_id)) {
+            state.user.avatarUrl = state.employees[idx]?.photo || state.user.avatarUrl;
+            applyHeaderAvatar();
         }
         closeModal();
         renderEmployeesPage();
