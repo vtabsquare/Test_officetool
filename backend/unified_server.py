@@ -3667,6 +3667,8 @@ def get_status(employee_id):
                 if login_rec:
                     checkin_time_raw = login_rec.get(LA_FIELD_CHECKIN_TIME)
                     checkout_time_raw = login_rec.get(LA_FIELD_CHECKOUT_TIME)
+                    checkin_ts_raw = login_rec.get(LA_FIELD_CHECKIN_TS)
+                    base_seconds_raw = login_rec.get(LA_FIELD_BASE_SECONDS)
                     if checkin_time_raw and not checkout_time_raw:
                         checkin_dt = None
                         try:
@@ -3691,6 +3693,17 @@ def get_status(employee_id):
                                 "recovered": True,
                                 "source": "login_activity",
                             }
+                            # Prefer durable timestamp + base seconds for accurate elapsed
+                            try:
+                                if checkin_ts_raw is not None:
+                                    session_payload["checkin_timestamp"] = int(checkin_ts_raw)
+                            except Exception:
+                                pass
+                            try:
+                                if base_seconds_raw is not None:
+                                    session_payload["base_seconds"] = int(base_seconds_raw)
+                            except Exception:
+                                pass
                             active_sessions[key] = session_payload
                             print(f"[INFO] Recovered session from login activity for {key}")
             except Exception as login_recover_err:

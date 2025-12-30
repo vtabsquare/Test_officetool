@@ -962,8 +962,7 @@ body.dark-theme #app-container.sidebar-hidden .nav-link.active i {
 }
 
 .user-avatar.has-photo {
-  background: none !important;
-  background-color: transparent;
+  background-color: #ffffff;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
