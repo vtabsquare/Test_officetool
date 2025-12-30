@@ -3772,7 +3772,6 @@ def get_status(employee_id):
                 attendance_id = session.get("attendance_id")
                 # Prefer durable timestamp for elapsed to avoid timezone/parse issues
                 checkin_ts_val = session.get("checkin_timestamp")
-                checkin_dt_raw = session.get("checkin_datetime")
                 if checkin_ts_val is not None:
                     try:
                         checkin_ts_int = int(checkin_ts_val)
@@ -3780,25 +3779,9 @@ def get_status(employee_id):
                     except Exception:
                         elapsed = 0
                 if elapsed <= 0:
-                    # Fallback to stored datetime
-                    if checkin_dt_raw:
-                        try:
-                            checkin_dt = datetime.fromisoformat(checkin_dt_raw)
-                            elapsed = int((datetime.now() - checkin_dt).total_seconds())
-                        except Exception:
-                            elapsed = 0
-                if elapsed <= 0 and checkin_time:
-                    # Last resort: build from time-only for today
-                    try:
-                        ct = datetime.strptime(checkin_time, "%H:%M:%S")
-                        ct = ct.replace(
-                            year=datetime.now().year,
-                            month=datetime.now().month,
-                            day=datetime.now().day,
-                        )
-                        elapsed = int(max(0, (datetime.now() - ct).total_seconds()))
-                    except Exception:
-                        pass
+                    # Fallback to datetime parse
+                    checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
+                    elapsed = int((datetime.now() - checkin_dt).total_seconds())
                 if elapsed < 0:
                     elapsed = 0
             except Exception as e:
@@ -3836,14 +3819,6 @@ def get_status(employee_id):
             print(f"[WARN] Failed to fetch today's attendance in status: {fetch_err}")
 
         if active:
-            # Prefer base_seconds if present (from login activity) to avoid undercount
-            base_seconds_val = 0
-            try:
-                base_seconds_val = int(active_sessions[key].get("base_seconds") or 0)
-            except Exception:
-                base_seconds_val = 0
-            # Avoid double counting if total_seconds_today already reflects stored duration
-            total_seconds_today = max(total_seconds_today, base_seconds_val)
             total_seconds_today += max(0, elapsed)
 
         # Classification from total seconds today
