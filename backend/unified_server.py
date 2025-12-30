@@ -3770,8 +3770,18 @@ def get_status(employee_id):
                 session = active_sessions[key]
                 checkin_time = session.get("checkin_time")
                 attendance_id = session.get("attendance_id")
-                checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
-                elapsed = int((datetime.now() - checkin_dt).total_seconds())
+                # Prefer durable timestamp for elapsed to avoid timezone/parse issues
+                checkin_ts_val = session.get("checkin_timestamp")
+                if checkin_ts_val is not None:
+                    try:
+                        checkin_ts_int = int(checkin_ts_val)
+                        elapsed = int(max(0, round(datetime.now().timestamp() - (checkin_ts_int / 1000.0))))
+                    except Exception:
+                        elapsed = 0
+                if elapsed <= 0:
+                    # Fallback to datetime parse
+                    checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
+                    elapsed = int((datetime.now() - checkin_dt).total_seconds())
                 if elapsed < 0:
                     elapsed = 0
             except Exception as e:
