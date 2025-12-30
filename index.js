@@ -31,6 +31,15 @@ const API_BASE_URL =
 
 const normalizeApiBase = () => String(API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
+// Minimal theme initializer (prevents runtime errors when theme helpers are absent)
+const initTheme = () => {
+  try {
+    const body = document.body;
+    body.setAttribute('data-theme', 'light');
+    body.classList.remove('dark-theme', 'sunset-theme');
+  } catch {}
+};
+
 const syncAccessLevelFromServer = async () => {
   const username = String(state.user?.email || state.user?.username || '').trim();
   if (!username) return;
@@ -706,7 +715,7 @@ const init = async () => {
 
   // Set default hash if not present and render immediately
   if (!window.location.hash) {
-    window.location.hash = '#/';
+    window.location.hash = '#/dashboard';
   }
   router();
 
