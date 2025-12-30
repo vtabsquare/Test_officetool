@@ -150,7 +150,40 @@ const handleNavClick = (e) => {
 
 const closeProfilePanel = () => {
   const overlay = document.getElementById('profile-overlay');
-  if (overlay) overlay.remove();
+  if (!overlay) return;
+  const panel = overlay.querySelector('.profile-panel');
+
+  overlay.classList.remove('open');
+  panel?.classList.remove('open');
+  overlay.classList.add('closing');
+  panel?.classList.add('closing');
+
+  const cleanup = () => {
+    overlay.removeEventListener('transitionend', cleanup);
+    overlay.remove();
+  };
+
+  overlay.addEventListener('transitionend', cleanup);
+  // Fallback in case transitionend doesn't fire
+  setTimeout(() => {
+    if (document.getElementById('profile-overlay')) {
+      overlay.removeEventListener('transitionend', cleanup);
+      overlay.remove();
+    }
+  }, 400);
+};
+
+const profileIcon = (icon, label, value) => {
+  if (!value) return '';
+  return `
+    <div class="profile-detail-item">
+      <div class="detail-icon">${icon}</div>
+      <div class="detail-copy">
+        <span class="detail-label">${label}</span>
+        <strong class="detail-value">${value}</strong>
+      </div>
+    </div>
+  `;
 };
 
 const renderProfileOverlay = (profile) => {
@@ -162,35 +195,48 @@ const renderProfileOverlay = (profile) => {
 
   const overlay = document.createElement('div');
   overlay.id = 'profile-overlay';
-  overlay.className = 'profile-overlay open';
+  overlay.className = 'profile-overlay';
   overlay.innerHTML = `
-    <div class="profile-panel open">
-      <button class="profile-close-btn" aria-label="Close profile panel">&times;</button>
-      <div class="profile-header">
-        <div class="profile-avatar-wrap">
-          <div class="profile-avatar ${avatarUrl ? 'has-photo' : ''}" ${avatarUrl ? `style="background-image:url('${avatarUrl}')"` : ''}>${avatarUrl ? '' : initials}</div>
-          <div class="avatar-actions">
-            <label class="avatar-upload-btn">
-              <input id="avatar-file-input" type="file" accept="image/*" style="display:none;" />
-              <span class="avatar-upload-text">Upload photo</span>
-            </label>
-            <small class="avatar-hint">Square images look best</small>
+    <div class="profile-panel">
+      <div class="profile-panel-header">
+        <div class="profile-panel-meta">
+          <span class="profile-panel-eyebrow">Profile</span>
+          <h2>${profile.name || 'User'}</h2>
+          ${profile.designation ? `<p>${profile.designation}</p>` : ''}
+        </div>
+        <button class="profile-close-btn" aria-label="Close profile panel">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="profile-hero">
+        <div class="hero-wave"></div>
+        <div class="profile-avatar ${avatarUrl ? 'has-photo' : ''}" ${avatarUrl ? `style="background-image:url('${avatarUrl}')"` : ''}>
+          ${avatarUrl ? '' : initials}
+        </div>
+        <label class="avatar-upload-pill">
+          <input id="avatar-file-input" type="file" accept="image/*" hidden />
+          <i class="fa-solid fa-camera"></i>
+          <span>Upload photo</span>
+        </label>
+      </div>
+
+      <div class="profile-panel-body">
+        <div class="profile-detail-card">
+          <div class="detail-grid">
+            ${profileIcon('<i class="fa-solid fa-id-badge"></i>', 'Employee ID', profile.id || profile.employee_id)}
+            ${profileIcon('<i class="fa-solid fa-phone"></i>', 'Contact No', profile.contact_number || profile.phone)}
+            ${profileIcon('<i class="fa-solid fa-envelope"></i>', 'Email', profile.email)}
+            ${profileIcon('<i class="fa-solid fa-location-dot"></i>', 'Address', profile.address || profile.location)}
+            ${profileIcon('<i class="fa-solid fa-building"></i>', 'Department', profile.department)}
+            ${profileIcon('<i class="fa-solid fa-briefcase"></i>', 'Designation', profile.designation)}
+            ${profileIcon('<i class="fa-solid fa-calendar-check"></i>', 'Date of Joining', profile.doj ? new Date(profile.doj).toLocaleDateString() : '')}
           </div>
         </div>
-        <div class="profile-meta">
-          <div class="profile-name">${profile.name || 'User'}</div>
-          ${profile.designation ? `<div class="profile-role">${profile.designation}</div>` : ''}
-          ${profile.id ? `<div class="profile-id">${profile.id}</div>` : ''}
-        </div>
       </div>
-      <div class="profile-body">
-        ${profile.email ? `<div class="profile-field"><span>Email</span><strong>${profile.email}</strong></div>` : ''}
-        ${profile.phone ? `<div class="profile-field"><span>Phone</span><strong>${profile.phone}</strong></div>` : ''}
-        ${profile.department ? `<div class="profile-field"><span>Department</span><strong>${profile.department}</strong></div>` : ''}
-        ${profile.location ? `<div class="profile-field"><span>Location</span><strong>${profile.location}</strong></div>` : ''}
-      </div>
-      <div class="profile-actions">
-        <button id="profile-close-btn" class="btn btn-secondary" style="width:100%;">Close</button>
+
+      <div class="profile-footer">
+        <button id="profile-close-btn" class="btn btn-secondary">Close</button>
       </div>
     </div>
   `;
@@ -243,6 +289,10 @@ const renderProfileOverlay = (profile) => {
   }
 
   document.body.appendChild(overlay);
+  requestAnimationFrame(() => {
+    overlay.classList.add('open');
+    overlay.querySelector('.profile-panel')?.classList.add('open');
+  });
 };
 
 const openProfilePanel = async () => {
@@ -267,22 +317,26 @@ const openProfilePanel = async () => {
     const currentId = String(state?.user?.id || '').toUpperCase();
     let profile = { ...(state?.user || {}) };
 
-    // Attempt to hydrate from master employee directory
+    // Attempt to hydrate from master employee directory (crc6f_table12s)
     if (currentId) {
       try {
         const employees = await listAllEmployees();
         const match = (employees || []).find(e => String(e.employee_id || e.id || '').toUpperCase() === currentId);
         if (match) {
+          const fullName = match.name ||
+            [match.first_name, match.last_name].filter(Boolean).join(' ').trim();
           profile = {
             ...profile,
             id: match.employee_id || match.id || profile.id,
-            name: match.name || profile.name,
-            designation: match.designation || match.role || profile.designation,
+            name: fullName || profile.name,
+            designation: match.designation || profile.designation,
             email: match.email || profile.email,
-            phone: match.phone || match.contact || profile.phone,
-            department: match.department || match.dept || profile.department,
-            location: match.location || match.city || profile.location,
+            contact_number: match.contact_number || match.contact || profile.contact_number || profile.phone,
+            address: match.address || profile.address || match.location,
+            department: match.department || profile.department,
+            doj: match.doj || profile.doj,
             avatarUrl: match.photo || match.avatarUrl || profile.avatarUrl,
+            initials: profile.initials || (fullName ? fullName.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase() : profile.initials),
           };
         }
       } catch (err) {

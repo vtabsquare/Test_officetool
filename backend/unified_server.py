@@ -6125,8 +6125,19 @@ def get_all_employees():
         fetch_count = 5000
         select_list = [
             field_map[k]
-            for k in ['id', 'fullname', 'firstname', 'lastname',
-                      'email', 'department', 'designation', 'active']
+            for k in [
+                'id',
+                'fullname',
+                'firstname',
+                'lastname',
+                'email',
+                'contact',
+                'address',
+                'department',
+                'designation',
+                'doj',
+                'active'
+            ]
             if field_map.get(k)
         ]
 
@@ -6166,8 +6177,11 @@ def get_all_employees():
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": rec.get(field_map.get('email')),
+                "contact_number": rec.get(field_map.get('contact')),
+                "address": rec.get(field_map.get('address')),
                 "department": rec.get(field_map.get('department')),
                 "designation": rec.get(field_map.get('designation')),
+                "doj": rec.get(field_map.get('doj')),
                 "active": rec.get(field_map.get('active')),
             })
 

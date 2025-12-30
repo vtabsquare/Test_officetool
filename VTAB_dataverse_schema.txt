@@ -1,0 +1,119 @@
+VTAB Square Dataverse Schema Overview
+====================================
+
+This document summarizes every Dataverse table touched by the VTAB Square project, including primary keys, key columns, and relationship notes derived from the backend configuration and feature code.
+
+1. Employee Master — crc6f_table12s
+   • Purpose: Core employee directory used by nearly every feature module.
+   • Primary Key: crc6f_table12id.
+   • Key Columns: crc6f_employeeid (business key referenced by attendance/leaves/assets), crc6f_firstname, crc6f_lastname, crc6f_email, crc6f_contactnumber, crc6f_address, crc6f_department, crc6f_designation, crc6f_doj, crc6f_activeflag, crc6f_experience, crc6f_quotahours, crc6f_employeeflag.
+   • Foreign Keys: Referenced by attendance (FIELD_EMPLOYEE_ID), leave (crc6f_employeeid), assets, chat members, hierarchy, login activity, etc.
+
+2. Login Accounts — crc6f_hr_login_detailses (fallbacks: crc6f_hr_login_details, crc6f_hr_logindetails)
+   • Purpose: Stores portal credentials, attempt counters, and access level.
+   • Primary Key: crc6f_hr_login_detailsid.
+   • Key Columns: crc6f_username, crc6f_password (SHA-256 hash), crc6f_accesslevel (L1/L2/L3), crc6f_user_status, crc6f_loginattempts, crc6f_employeename, crc6f_userid, crc6f_last_login.
+   • Foreign Keys: crc6f_userid links to employee master via business key when present.
+
+3. Attendance — crc6f_table13s
+   • Purpose: Daily check-in/out tracker with automatic duration and status rules.
+   • Primary Key: crc6f_table13id.
+   • Key Columns: crc6f_attendanceid (ATD-xxxxx business id), crc6f_employeeid (FK to employee master), crc6f_date, crc6f_checkin, crc6f_checkout, crc6f_duration (hours as number), crc6f_duration_intext (“N hour(s) M minute(s)”).
+   • Foreign Keys: crc6f_employeeid ← crc6f_table12s.crc6f_employeeid.
+
+4. Leave Requests — crc6f_table14s
+   • Purpose: Stores each leave application (supports paid/unpaid splits).
+   • Primary Key: crc6f_table14id.
+   • Key Columns: crc6f_leaveid, crc6f_employeeid, crc6f_leavetype, crc6f_startdate, crc6f_enddate, crc6f_totaldays, crc6f_paidunpaid, crc6f_status, crc6f_approvedby, crc6f_rejectionreason.
+   • Foreign Keys: crc6f_employeeid → employee master.
+
+5. Leave Balances — crc6f_hr_leavemangements (variants handled automatically)
+   • Purpose: Tracks remaining CL/SL/Comp Off for each employee.
+   • Primary Key: crc6f_hr_leavemangementid (or variant resolved at runtime).
+   • Key Columns: crc6f_employeeid / crc6f_empid, crc6f_cl, crc6f_sl, crc6f_compoff, crc6f_total, crc6f_actualtotal, crc6f_leaveallocationtype.
+   • Foreign Keys: crc6f_employeeid → employee master; decremented/incremented by leave workflows.
+
+6. Asset Register — crc6f_hr_assetdetailses
+   • Purpose: Inventory of issued company assets.
+   • Primary Key: crc6f_hr_assetdetailsid.
+   • Key Columns: crc6f_assetid (category-based ID such as LP-1), crc6f_assetname, crc6f_serialnumber, crc6f_assetcategory, crc6f_location, crc6f_assetstatus, crc6f_assignedto, crc6f_employeeid, crc6f_assignedon.
+   • Foreign Keys: crc6f_employeeid → employee master (optional).
+
+7. Holiday Calendar — crc6f_hr_holidayses
+   • Purpose: Stores organization-wide holiday list.
+   • Primary Key: crc6f_hr_holidaysid.
+   • Key Columns: crc6f_date, crc6f_holidayname.
+   • Relationships: Referenced by frontend calendar widgets for attendance planning.
+
+8. Client Directory — crc6f_hr_clients (auto-resolved variants include crc6f_hr_clientses / crc6f_clients)
+   • Purpose: Customer metadata shown in project and sales modules.
+   • Primary Key: crc6f_hr_clientsid.
+   • Key Columns: crc6f_clientid, crc6f_clientname, crc6f_companyname, crc6f_email, crc6f_phone, crc6f_address, crc6f_country, createdby, createdon.
+
+9. Projects — crc6f_hr_projectheaders (variant: crc6f_hr_projectheaderses)
+   • Purpose: High-level project records that tie clients, managers, and schedules.
+   • Primary Key: crc6f_hr_projectheaderid.
+   • Key Columns: crc6f_projectid (VTAB001…), crc6f_projectname, crc6f_client, crc6f_manager, crc6f_startdate, crc6f_enddate, crc6f_projectstatus, crc6f_estimationcost, crc6f_noofcontributors.
+   • Foreign Keys: crc6f_client → client table; manager often stores employee business id.
+
+10. Project Boards — crc6f_hr_projectdetailses
+    • Purpose: Kanban/board metadata used by task management UI.
+    • Primary Key: crc6f_hr_projectdetailsid.
+    • Key Columns: crc6f_boardid (BRD001…), crc6f_boardname, crc6f_boarddescription, crc6f_nooftasks, crc6f_noofmembers, crc6f_projectid.
+    • Foreign Keys: crc6f_projectid → project headers.
+
+11. Project Tasks — crc6f_hr_taskdetailses
+    • Purpose: Individual work items tied to projects and boards.
+    • Primary Key: crc6f_hr_taskdetailsid.
+    • Key Columns: crc6f_taskid (TASK001…), crc6f_taskname, crc6f_taskdescription, crc6f_taskpriority, crc6f_taskstatus, crc6f_assignedto, crc6f_assigneddate, crc6f_duedate, crc6f_projectid, crc6f_boardid.
+    • Foreign Keys: crc6f_projectid → project headers; crc6f_boardid → project boards; assigned_to typically stores employee name/id.
+
+12. Project Contributors — crc6f_hr_projectcontributorses
+    • Purpose: Junction table between employees and projects with billing metadata.
+    • Primary Key: crc6f_hr_projectcontributorsid.
+    • Key Columns: crc6f_recordid (REC001…), crc6f_employeeid, crc6f_employeename, crc6f_billingtype, crc6f_assigneddate, crc6f_projectid, crc6f_hourlyrate.
+    • Foreign Keys: crc6f_employeeid → employee master; crc6f_projectid → project headers.
+
+13. Chat Conversations — crc6f_hr_chat_conversations
+    • Primary Key: crc6f_hr_chat_conversationsid.
+    • Key Columns: crc6f_conversationid (business key), crc6f_empname (display name), crc6f_isgroup, crc6f_description, crc6f_icon_url, createdon, crc6f_created_by.
+    • Relationships: One-to-many with conversation members and messages.
+
+14. Chat Conversation Members — crc6f_hr_conversation_memberses
+    • Primary Key: crc6f_hr_conversation_membersid.
+    • Key Columns: crc6f_conversation_id (FK to chat conversations), crc6f_member_id, crc6f_user_id (employee id), crc6f_joined_on, crc6f_is_admin, crc6f_is_muted.
+
+15. Chat Messages — crc6f_hr_messages
+    • Primary Key: crc6f_hr_messagesid.
+    • Key Columns: crc6f_message_id, crc6f_conversation_id (FK), crc6f_sender_id, crc6f_message_type, crc6f_message_text, crc6f_media_url / crc6f_mime_type, createdon; attachments reference annotations via crc6f_file_id.
+
+16. Intern Lifecycle — crc6f_hr_interndetailses
+    • Primary Key: crc6f_hr_interndetailsid.
+    • Key Columns: crc6f_internid, crc6f_employeeid (mentor link), crc6f_unpaidduration/start/end, crc6f_paidtrainingduration/start/end/salary, crc6f_probationduration/start/end/salary, crc6f_postprobduration/start/end/salary, createdby.
+
+17. Hierarchy — crc6f_hierarchy / crc6f_hierarchies / crc6f_hr_hierarchy(es)
+    • Primary Key: crc6f_hr_hierarchyid.
+    • Key Columns: crc6f_employeeid, crc6f_managerid, createdby.
+    • Purpose: Stores manager → reportee mappings for team view.
+
+18. Login Activity — crc6f_hr_loginactivitytbs
+    • Primary Key: crc6f_hr_loginactivitytbid.
+    • Key Columns: crc6f_employeeid, crc6f_date, crc6f_checkintime, crc6f_checkouttime, crc6f_checkinlocation, crc6f_checkoutlocation, crc6f_deviceinfo, crc6f_ipaddress (fields inferred from sync payloads).
+    • Foreign Keys: crc6f_employeeid → employee master; entries synced from in-app geolocation logs.
+
+19. Leave Inbox / Notifications — crc6f_hr_inboxes / crc6f_hr_inbox
+    • Purpose: Stores workflow notifications; entity name auto-resolved per tenant.
+    • Key Columns: Not explicitly enumerated in code, but payloads include message text, status, and owner references linked to employee IDs.
+
+20. Supporting AI/Automation Tables
+    • Additional Dataverse sets exposed to conversational automations include: crc6f_hr_projectboardses (boards), crc6f_hr_projectcontributorses (contributors), crc6f_hr_taskdetailses (tasks), crc6f_hr_clients (clients), crc6f_hr_assetdetailses (assets), crc6f_hr_holidayses (holidays), crc6f_hr_messageses/msgstatus/annotations (chat), as listed in backend/ai_automation.py.
+
+Foreign-Key Summary
+-------------------
+• crc6f_employeeid in attendance, leave, leave balance, assets, interns, login activity, chat members, and hierarchy always references crc6f_table12s.crc6f_employeeid.
+• crc6f_projectid links project headers → boards/tasks/contributors/time tracking logs.
+• crc6f_clientid on project headers references the clients table for reporting.
+• Chat module tables link via crc6f_conversationid and crc6f_message_id, with annotations storing file binaries using crc6f_file_id.
+• Leave workflows cross-link crc6f_table14s and crc6f_hr_leavemangements by crc6f_employeeid to decrement/replenish balances.
+
+Use this catalog as the authoritative mapping when building the Power BI data model—each table and key listed above is present in the live Dataverse environment accessed by the Flask backend.
