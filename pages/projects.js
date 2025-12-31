@@ -3431,3 +3431,26 @@ async function openTaskDetailsPage(projectId, taskId) {
     await deleteTask(taskId, projectId);
   };
 }
+
+// ==========================
+// Route entry point
+// ==========================
+export const renderProjectsRoute = async () => {
+  // Ensure we have projects from backend/local seed
+  await fetchProjects();
+
+  // Parse hash query for deep links
+  const { id, tab = "details", board } = getQuery();
+
+  if (id) {
+    renderProjectDetails(id, tab);
+    // If board param present, pass through hash for CRM tab
+    if (tab === "crm" && board) {
+      window.location.hash = `#/time-projects?id=${encodeURIComponent(
+        id
+      )}&tab=crm&board=${encodeURIComponent(board)}`;
+    }
+  } else {
+    renderList();
+  }
+};
