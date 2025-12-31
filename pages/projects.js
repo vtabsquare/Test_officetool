@@ -72,12 +72,14 @@ const parseProjectsCSV = (text) => {
 
 const showProjectBulkUploadModal = () => {
   const formHTML = `
-    <div class="form-group">
-      <label for="proj-csv-file">Upload CSV</label>
-      <input type="file" id="proj-csv-file" accept=".csv" />
-      <small>Columns: name, code, client, status, start_date, end_date, contributors</small>
+    <div class="form-group" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label for="proj-csv-file" style="font-weight:600;">Upload CSV</label>
+        <input type="file" id="proj-csv-file" accept=".csv" style="padding:10px; border-radius:10px; border:1px solid var(--border-color);" />
+        <small style="color:#64748b;">Columns: name, code, client, status, start_date, end_date, contributors</small>
+      </div>
+      <div id="proj-upload-preview" style="max-height:220px; overflow:auto; padding:12px; border:1px dashed var(--border-color); border-radius:12px; background:#f8fafc;"></div>
     </div>
-    <div id="proj-upload-preview" style="max-height:180px; overflow:auto; margin-top:12px;"></div>
   `;
   renderModal("Bulk Upload Projects", formHTML, "proj-upload-submit", "normal", "Upload");
   const form = document.getElementById("modal-form");
@@ -93,13 +95,42 @@ const showProjectBulkUploadModal = () => {
       const rows = parseProjectsCSV(text);
       const preview = document.getElementById("proj-upload-preview");
       if (preview) {
-        preview.innerHTML =
-          rows && rows.length
-            ? `<pre style="white-space:pre-wrap; font-size:12px;">${rows
-                .slice(0, 5)
-                .map((r, idx) => `${idx + 1}. ${r.name} | ${r.code} | ${r.client} | ${r.status}`)
-                .join("\n")}${rows.length > 5 ? `\n...and ${rows.length - 5} more` : ""}</pre>`
-            : "<div>No rows detected.</div>";
+        if (!rows || !rows.length) {
+          preview.innerHTML = "<div style='color:#475569;'>No rows detected.</div>";
+        } else {
+          const header = `<div style="font-weight:600; margin-bottom:6px; color:#0f172a;">Preview (first 5 rows)</div>`;
+          const table = `
+            <table style="width:100%; border-collapse:collapse; font-size:12px; color:#0f172a;">
+              <thead>
+                <tr style="background:#e2e8f0;">
+                  <th style="text-align:left; padding:6px; border:1px solid #cbd5e1;">#</th>
+                  <th style="text-align:left; padding:6px; border:1px solid #cbd5e1;">Name</th>
+                  <th style="text-align:left; padding:6px; border:1px solid #cbd5e1;">Code</th>
+                  <th style="text-align:left; padding:6px; border:1px solid #cbd5e1;">Client</th>
+                  <th style="text-align:left; padding:6px; border:1px solid #cbd5e1;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows
+                  .slice(0, 5)
+                  .map(
+                    (r, idx) => `
+                      <tr>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${idx + 1}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${r.name || ""}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${r.code || ""}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${r.client || ""}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${r.status || ""}</td>
+                      </tr>
+                    `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+            ${rows.length > 5 ? `<div style="margin-top:8px; color:#64748b;">…and ${rows.length - 5} more</div>` : ""}
+          `;
+          preview.innerHTML = header + table;
+        }
       }
     });
   }
