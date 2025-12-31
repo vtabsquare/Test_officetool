@@ -5016,10 +5016,12 @@ def bulk_create_projects():
                 pname = (row.get("crc6f_projectname") or "").strip()
                 client = (row.get("crc6f_client") or "").strip()
                 status = (row.get("crc6f_projectstatus") or "").strip()
-                contributors = row.get("crc6f_noofcontributors")
+                contributors_raw = row.get("crc6f_noofcontributors")
+                contributors = "" if contributors_raw is None else str(contributors_raw).strip()
+
                 start_dt = (row.get("crc6f_startdate") or "").strip()
                 end_dt = (row.get("crc6f_enddate") or "").strip()
-                if not pid or not pname or not client or contributors is None or not status or not start_dt:
+                if not pid or not pname or not client or contributors == "" or not status or not start_dt:
                     raise ValueError("Missing required fields (projectid, projectname, client, contributors, status, startdate)")
 
                 # Ensure unique project id
@@ -5038,7 +5040,7 @@ def bulk_create_projects():
                     "crc6f_startdate": start_dt,
                     "crc6f_enddate": end_dt,
                     "crc6f_estimationcost": row.get("crc6f_estimationcost"),
-                    "crc6f_noofcontributors": row.get("crc6f_noofcontributors"),
+                    "crc6f_noofcontributors": contributors,
                     "crc6f_projectdescription": row.get("crc6f_projectdescription"),
                 }
                 create_record(entity_set, payload)
