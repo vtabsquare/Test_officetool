@@ -759,23 +759,7 @@ const getQuery = () => {
   return q;
 };
 
-// ---------- Seed structures with details/tabs ----------
-(() => {
-  const cur = seedIfEmpty();
-  const enriched = cur.map((p) => ({
-    ...p,
-    manager: p.manager || "Balamurali Thangavelu",
-    description: p.description || "CRM Enhancements and Support",
-    currency: p.currency || "INR",
-    billing: p.billing || "Fixed",
-    contributorsList: p.contributorsList || [],
-    boards: p.boards || [
-      { name: "CRM", description: "", members: [], favorite: true },
-    ],
-    tasks: p.tasks || [],
-  }));
-  localStorage.setItem(LS_KEY, JSON.stringify(enriched));
-})();
+// Remove legacy demo seeding to avoid stale project lists; rely on backend fetch instead.
 
 // ---------- Backend integration ----------
 async function fetchProjects() {
