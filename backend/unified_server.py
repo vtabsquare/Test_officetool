@@ -3748,7 +3748,63 @@ def get_status(employee_id):
             except Exception as recover_err:
                 print(f"[WARN] Failed to recover session in status: {recover_err}")
 
+        # Fallback: derive active session from today's attendance record if check-in exists and checkout is missing
+        if key not in active_sessions:
+            try:
+                from datetime import date as _date
+                formatted_date = _date.today().isoformat()
+
+                token = get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "OData-MaxVersion": "4.0",
+                    "OData-Version": "4.0",
+                }
+                filter_query = (
+                    f"?$filter={FIELD_EMPLOYEE_ID} eq '{normalized_emp_id}' "
+                    f"and {FIELD_DATE} eq '{formatted_date}'"
+                )
+                url = f"{RESOURCE}/api/data/v9.2/{ATTENDANCE_ENTITY}{filter_query}"
+                resp = requests.get(url, headers=headers, timeout=20)
+                if resp.status_code == 200:
+                    vals = resp.json().get("value", [])
+                    if vals:
+                        rec = vals[0]
+                        checkin_time_rec = rec.get(FIELD_CHECKIN)
+                        checkout_time_rec = rec.get(FIELD_CHECKOUT)
+                        if checkin_time_rec and not checkout_time_rec:
+                            # Build base_seconds from stored duration hours if present
+                            base_seconds = 0
+                            try:
+                                base_hours = float(rec.get(FIELD_DURATION) or "0")
+                                base_seconds = int(round(max(0.0, base_hours) * 3600))
+                            except Exception:
+                                base_seconds = 0
+                            checkin_dt = None
+                            try:
+                                checkin_dt = datetime.strptime(checkin_time_rec, "%H:%M:%S").replace(
+                                    year=datetime.now().year,
+                                    month=datetime.now().month,
+                                    day=datetime.now().day,
+                                )
+                            except Exception:
+                                checkin_dt = datetime.now()
+                            active_sessions[key] = {
+                                "record_id": rec.get(FIELD_RECORD_ID) or rec.get("cr6f_table13id") or rec.get("id"),
+                                "checkin_time": checkin_time_rec,
+                                "checkin_datetime": checkin_dt.isoformat(),
+                                "attendance_id": rec.get(FIELD_ATTENDANCE_ID_CUSTOM),
+                                "local_date": formatted_date,
+                                "base_seconds": base_seconds,
+                                "source": "attendance_fallback",
+                            }
+                            print(f"[INFO] Recovered session from attendance record for {key}")
+            except Exception as attendance_recover_err:
+                print(f"[WARN] Failed attendance recovery for {key}: {attendance_recover_err}")
+
         # Fallback: derive active session from login activity log (survives server restarts)
+        # NOTE: placed after attendance record recovery to avoid overriding real check-in with login heartbeat
         if key not in active_sessions:
             try:
                 from datetime import date as _date
@@ -3760,7 +3816,6 @@ def get_status(employee_id):
                     checkout_time_raw = login_rec.get(LA_FIELD_CHECKOUT_TIME)
                     checkin_ts_raw = login_rec.get(LA_FIELD_CHECKIN_TS)
                     base_seconds_raw = login_rec.get(LA_FIELD_BASE_SECONDS)
-                    total_seconds_raw = login_rec.get(LA_FIELD_TOTAL_SECONDS)
 
                     # Only treat as active if there is a check-in AND no checkout recorded.
                     # If checkout exists (even with zero/older totals), assume stopped to avoid false reactivation.
@@ -3804,58 +3859,6 @@ def get_status(employee_id):
                             print(f"[INFO] Recovered session from login activity for {key}")
             except Exception as login_recover_err:
                 print(f"[WARN] Failed login-activity recovery for {key}: {login_recover_err}")
-
-        # Fallback: derive active session from today's attendance record if check-in exists and checkout is missing
-        if key not in active_sessions:
-            try:
-                from datetime import date as _date
-                formatted_date = _date.today().isoformat()
-                token = get_access_token()
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                    "OData-MaxVersion": "4.0",
-                    "OData-Version": "4.0",
-                }
-                filter_query = (
-                    f"?$filter={FIELD_EMPLOYEE_ID} eq '{normalized_emp_id}' "
-                    f"and {FIELD_DATE} eq '{formatted_date}'"
-                )
-                url = f"{RESOURCE}/api/data/v9.2/{ATTENDANCE_ENTITY}{filter_query}"
-                resp = requests.get(url, headers=headers, timeout=20)
-                if resp.status_code == 200:
-                    vals = resp.json().get("value", [])
-                    if vals:
-                        rec = vals[0]
-                        checkin_time_rec = rec.get(FIELD_CHECKIN)
-                        checkout_time_rec = rec.get(FIELD_CHECKOUT)
-                        if checkin_time_rec and not checkout_time_rec:
-                            # Build base_seconds from stored duration hours if present
-                            base_seconds = 0
-                            try:
-                                base_hours = float(rec.get(FIELD_DURATION) or "0")
-                                base_seconds = int(round(max(0.0, base_hours) * 3600))
-                            except Exception:
-                                base_seconds = 0
-                            checkin_dt = None
-                            try:
-                                checkin_dt = datetime.strptime(checkin_time_rec, "%H:%M:%S").replace(
-                                    year=now.year, month=now.month, day=now.day
-                                )
-                            except Exception:
-                                checkin_dt = now
-                            active_sessions[key] = {
-                                "record_id": rec.get(FIELD_RECORD_ID) or rec.get("cr6f_table13id") or rec.get("id"),
-                                "checkin_time": checkin_time_rec,
-                                "checkin_datetime": checkin_dt.isoformat(),
-                                "attendance_id": rec.get(FIELD_ATTENDANCE_ID_CUSTOM),
-                                "local_date": formatted_date,
-                                "base_seconds": base_seconds,
-                                "source": "attendance_fallback",
-                            }
-                            print(f"[INFO] Recovered session from attendance record for {key}")
-            except Exception as attendance_recover_err:
-                print(f"[WARN] Failed attendance recovery for {key}: {attendance_recover_err}")
 
         active = key in active_sessions
         elapsed = 0
