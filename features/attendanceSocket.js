@@ -194,6 +194,7 @@ function handleTimerSync(data) {
     if (data.employee_id !== uid) return;
 
     if (data.isRunning) {
+        state.timer.attendanceStatus = 'CHECKED_IN';
         if (data.checkinTimestamp) {
             state.timer.authoritativeCheckinAt = data.checkinTimestamp;
         }
@@ -230,6 +231,7 @@ function handleTimerSync(data) {
                 mode: 'running',
                 durationSeconds: baseSeconds,
                 authoritativeCheckinAt: state.timer.authoritativeCheckinAt || null,
+                attendanceStatus: state.timer.attendanceStatus,
             }));
         } catch {}
 
@@ -246,6 +248,7 @@ function handleTimerSync(data) {
         state.timer.isRunning = false;
         state.timer.startTime = null;
         state.timer.authoritativeCheckinAt = null;
+        state.timer.attendanceStatus = 'CHECKED_OUT';
         const incomingTotal = typeof data.totalSeconds === 'number' ? data.totalSeconds : null;
         const existingTotal = typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0;
         // Never downgrade due to late/empty sync payloads.
@@ -266,12 +269,7 @@ function handleRemoteCheckin(data) {
     const uid = String(state.user?.id || '').toUpperCase();
     if (data.employee_id !== uid) return;
 
-    // If we're already running, ignore (we initiated this)
-    if (state.timer.isRunning && state.timer.startTime) {
-        console.log('[ATTENDANCE-SOCKET] Ignoring remote check-in (already running locally)');
-        return;
-    }
-
+    state.timer.attendanceStatus = 'CHECKED_IN';
     if (data.checkinTimestamp) {
         state.timer.authoritativeCheckinAt = data.checkinTimestamp;
     }
@@ -301,6 +299,7 @@ function handleRemoteCheckin(data) {
             mode: 'running',
             durationSeconds: baseSeconds,
             authoritativeCheckinAt: state.timer.authoritativeCheckinAt || null,
+            attendanceStatus: state.timer.attendanceStatus,
         }));
     } catch {}
 
@@ -319,11 +318,6 @@ function handleRemoteCheckout(data) {
     if (data.employee_id !== uid) return;
 
     // If we're not running, ignore
-    if (!state.timer.isRunning) {
-        console.log('[ATTENDANCE-SOCKET] Ignoring remote check-out (not running locally)');
-        return;
-    }
-
     // Stop timer
     if (state.timer.intervalId) {
         clearInterval(state.timer.intervalId);
@@ -333,6 +327,7 @@ function handleRemoteCheckout(data) {
     state.timer.isRunning = false;
     state.timer.startTime = null;
     state.timer.authoritativeCheckinAt = null;
+    state.timer.attendanceStatus = 'CHECKED_OUT';
     const incomingTotal = typeof data.totalSeconds === 'number' ? data.totalSeconds : null;
     const existingTotal = typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0;
     // Never downgrade due to late/empty stopped payloads.
@@ -349,6 +344,7 @@ function handleRemoteCheckout(data) {
             mode: 'stopped',
             durationSeconds: typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0,
             authoritativeCheckinAt: state.timer.authoritativeCheckinAt || null,
+            attendanceStatus: state.timer.attendanceStatus,
         }));
     } catch {}
 

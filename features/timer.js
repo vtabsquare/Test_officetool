@@ -191,11 +191,13 @@ const startTimer = async () => {
      *
      * Do not reintroduce elapsed persistence or client-owned authority.
      */
+    state.timer.attendanceStatus = 'CHECKED_IN';
     state.timer.isRunning = true;
     state.timer.startTime = clickTime;
     state.timer.lastDuration = previousSeconds;
 
     if (state.timer.intervalId) clearInterval(state.timer.intervalId);
+
     state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
     updateTimerButton();
     updateTimerDisplay();
@@ -212,6 +214,7 @@ const startTimer = async () => {
             mode: 'running',
             durationSeconds: previousSeconds,
             authoritativeCheckinAt: state.timer.authoritativeCheckinAt || null,
+            attendanceStatus: state.timer.attendanceStatus,
         };
         localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
     } catch {}
@@ -239,6 +242,7 @@ const startTimer = async () => {
                         mode: 'running',
                         durationSeconds: typeof state.timer.lastDuration === 'number' ? state.timer.lastDuration : 0,
                         authoritativeCheckinAt: state.timer.authoritativeCheckinAt,
+                        attendanceStatus: state.timer.attendanceStatus,
                     };
                     localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
                 } catch {}
@@ -257,6 +261,7 @@ const startTimer = async () => {
                         mode: 'running',
                         durationSeconds: backendSeconds,
                         authoritativeCheckinAt: state.timer.authoritativeCheckinAt,
+                        attendanceStatus: state.timer.attendanceStatus,
                     };
                     localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
                 } catch {}
@@ -319,6 +324,7 @@ const stopTimer = async () => {
     state.timer.intervalId = null;
     state.timer.startTime = null;
     state.timer.lastDuration = localTotal;
+    state.timer.attendanceStatus = 'CHECKED_OUT';
     maybeUpdateLiveAttendanceStatus(localTotal, { force: true });
     updateTimerButton();
     updateTimerDisplay();
@@ -335,6 +341,7 @@ const stopTimer = async () => {
             mode: 'stopped',
             durationSeconds: localTotal,
             authoritativeCheckinAt: state.timer.authoritativeCheckinAt || null,
+            attendanceStatus: state.timer.attendanceStatus,
         };
         localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
     } catch {}
@@ -378,6 +385,7 @@ const stopTimer = async () => {
                         mode: 'stopped',
                         durationSeconds: lastSeconds,
                         authoritativeCheckinAt: state.timer.authoritativeCheckinAt,
+                        attendanceStatus: state.timer.attendanceStatus,
                     };
                     localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
                 } catch {}
@@ -388,6 +396,7 @@ const stopTimer = async () => {
             maybeUpdateLiveAttendanceStatus(state.timer.lastDuration || 0, { force: true });
 
             // Clear authoritative anchor on successful checkout; running state is now stopped
+            state.timer.attendanceStatus = 'CHECKED_OUT';
             state.timer.authoritativeCheckinAt = null;
             try {
                 const payload = {
@@ -397,6 +406,7 @@ const stopTimer = async () => {
                     mode: 'stopped',
                     durationSeconds: state.timer.lastDuration,
                     authoritativeCheckinAt: state.timer.authoritativeCheckinAt,
+                    attendanceStatus: state.timer.attendanceStatus,
                 };
                 localStorage.setItem(uid ? `timerState_${uid}` : 'timerState', JSON.stringify(payload));
             } catch {}
@@ -473,6 +483,7 @@ export const loadTimerState = async () => {
                 state.timer.startTime = syncedStartTime;
                 state.timer.lastDuration = baseFromBackend;
                 state.timer.authoritativeCheckinAt = statusData.checkin_timestamp || null;
+                state.timer.attendanceStatus = 'CHECKED_IN';
 
                 const today = new Date();
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -484,6 +495,7 @@ export const loadTimerState = async () => {
                         mode: 'running',
                         durationSeconds: baseFromBackend,
                         authoritativeCheckinAt: state.timer.authoritativeCheckinAt,
+                        attendanceStatus: state.timer.attendanceStatus,
                     }));
                 } catch {}
                 if (state.timer.intervalId) clearInterval(state.timer.intervalId);
@@ -497,6 +509,7 @@ export const loadTimerState = async () => {
                 state.timer.isRunning = false;
                 state.timer.startTime = null;
                 state.timer.authoritativeCheckinAt = null;
+                state.timer.attendanceStatus = 'CHECKED_OUT';
                 if (state.timer.intervalId) {
                     clearInterval(state.timer.intervalId);
                     state.timer.intervalId = null;
@@ -530,6 +543,7 @@ export const loadTimerState = async () => {
     const savedDate = parsed.date;
     const durationSeconds = typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : 0;
     const authoritativeCheckinAt = parsed.authoritativeCheckinAt || null;
+    const cachedStatus = parsed.attendanceStatus || null;
 
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -539,6 +553,7 @@ export const loadTimerState = async () => {
         state.timer.startTime = null;
         state.timer.lastDuration = 0;
         state.timer.authoritativeCheckinAt = null;
+        state.timer.attendanceStatus = 'CHECKED_OUT';
         try { localStorage.removeItem(storageKey); } catch {}
         return;
     }
@@ -546,11 +561,15 @@ export const loadTimerState = async () => {
     if (authoritativeCheckinAt) {
         state.timer.authoritativeCheckinAt = authoritativeCheckinAt;
     }
+    if (cachedStatus) {
+        state.timer.attendanceStatus = cachedStatus;
+    }
 
     if (mode === 'running') {
         // With backend unreachable, fall back to local running state
         state.timer.isRunning = true;
         state.timer.lastDuration = durationSeconds || 0;
+        state.timer.attendanceStatus = state.timer.attendanceStatus || 'CHECKED_IN';
 
         if (state.timer.authoritativeCheckinAt) {
             // Anchor to authoritative timestamp; ignore stale local startTime for decisions
@@ -570,6 +589,7 @@ export const loadTimerState = async () => {
         state.timer.isRunning = false;
         state.timer.startTime = null;
         state.timer.lastDuration = durationSeconds;
+        state.timer.attendanceStatus = 'CHECKED_OUT';
         updateTimerDisplay();
     }
 };

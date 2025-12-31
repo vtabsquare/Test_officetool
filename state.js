@@ -5,7 +5,10 @@ export const state = {
     intervalId: null,
     startTime: null,
     isRunning: false,
+    // Authoritative server-side check-in timestamp (UTC). Will become the single source of truth for elapsed math.
     authoritativeCheckinAt: null,
+    // Authoritative status from server/socket: CHECKED_IN | CHECKED_OUT
+    attendanceStatus: 'CHECKED_OUT',
     lastDuration: 0,
     lastAutoStatus: null,
   },
