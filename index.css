@@ -5588,7 +5588,8 @@ body.dark-theme .task-link {
 
 .holidays-table-container .table th:nth-child(2),
 .holidays-table-container .table td:nth-child(2) {
-  width: 150px;
+  width: auto;
+  text-align: left;
 }
 
 .holidays-table-container .table th:nth-child(3),
