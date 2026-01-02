@@ -213,6 +213,26 @@ export const renderEmployeesPage = async (filter = '', page = empCurrentPage) =>
             photo: normalizePhoto(e.photo || e.profile_picture)
         }));
 
+        // If the logged-in user is present in this page of employees, hydrate the header avatar.
+        const matchMe = (state.employees || []).find(emp =>
+            (state.user?.id && emp.id === state.user.id) ||
+            (state.user?.email && emp.email?.toLowerCase() === state.user.email.toLowerCase())
+        );
+        if (matchMe && matchMe.photo) {
+            state.user = { ...(state.user || {}), avatarUrl: matchMe.photo };
+            try {
+                const authRaw = localStorage.getItem('auth');
+                if (authRaw) {
+                    const parsed = JSON.parse(authRaw);
+                    if (parsed && parsed.user) {
+                        parsed.user.avatarUrl = matchMe.photo;
+                        localStorage.setItem('auth', JSON.stringify(parsed));
+                    }
+                }
+            } catch {}
+            applyHeaderAvatar();
+        }
+
         const totalCount = typeof total === 'number' ? total : undefined;
         const totalPages = totalCount ? Math.max(1, Math.ceil(totalCount / (pageSize || EMP_PAGE_SIZE))) : undefined;
         const prevDisabled = empCurrentPage <= 1 ? 'disabled' : '';
