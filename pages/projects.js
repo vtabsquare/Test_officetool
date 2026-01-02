@@ -1097,6 +1097,9 @@ const renderProjectDetails = (id, tab) => {
     </div>
 
     <div class="crm-toolbar" style="display: flex; gap: 10px; align-items: center;">
+      <button id="projects-back" class="btn btn-light" style="background:white; color:var(--primary-color); font-weight:600; border-radius:8px;">
+        <i class="fa-solid fa-arrow-left"></i> BACK
+      </button>
       ${tab === "details" && canManage
       ? '<button id="pd-edit" class="btn btn-light" style="background:white; color:var(--primary-color); font-weight:600; border-radius:8px;">EDIT</button>'
       : ""
@@ -1173,6 +1176,13 @@ const renderProjectDetails = (id, tab) => {
     styles + body,
     ""
   );
+
+  const backBtn = document.getElementById("projects-back");
+  if (backBtn) {
+    backBtn.addEventListener("click", () => {
+      window.location.hash = "#/time-projects";
+    });
+  }
 
   // Tab switching
   document.querySelectorAll(".tab").forEach((btn) =>
