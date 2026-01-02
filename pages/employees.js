@@ -19,6 +19,7 @@ let currentDeletedEmployees = []; // Store current deleted employees for restore
 let hasDeletedEmployees = false; // Track if deleted employees exist in backend
 let employeeViewMode = 'card';
 let photoDraft = { dataUrl: null, cleared: false };
+let initialPhotoRef = null;
 
 const cleanDataUrl = (dataUrl) => {
     if (!dataUrl || typeof dataUrl !== 'string') return undefined;
@@ -53,13 +54,14 @@ const applyHeaderAvatar = () => {
 };
 
 const initPhotoUploader = (initialPhoto = null) => {
+    initialPhotoRef = initialPhoto;
     const input = document.getElementById('photo-input');
     const trigger = document.getElementById('upload-photo-btn');
     const removeBtn = document.getElementById('remove-photo-btn');
     const preview = document.getElementById('photo-preview');
 
     const applyPreview = () => {
-        const activePhoto = photoDraft.dataUrl ?? (photoDraft.cleared ? null : initialPhoto);
+        const activePhoto = photoDraft.dataUrl ?? (photoDraft.cleared ? null : initialPhotoRef);
         if (activePhoto) {
             preview?.classList.add('has-photo');
             if (preview) preview.style.backgroundImage = `url('${activePhoto}')`;
@@ -458,7 +460,8 @@ const parseCSVText = (text) => {
 };
 
 // Full-page view for Bulk Delete
-export const renderBulkDeletePage = async () => {
+export const renderHolidaysPage = async () => {
+
     bulkDeleteFilter = '';
     bulkDeleteSelected = new Set();
     restoreSelected = new Set();
