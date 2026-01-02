@@ -421,8 +421,9 @@ export const loadTimerState = async () => {
                 console.log(`✅ Timer restored from backend (elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
                 return;
             } else {
-                // Backend says no active session; clear any stale local cache silently
-                try { localStorage.removeItem(storageKey); } catch {}
+                // Backend says no active session; do not wipe local cache here.
+                // The socket server or API may have restarted and lost in-memory state;
+                // falling back to local cache below avoids resetting a running timer.
             }
         } catch (err) {
             console.warn('Failed to fetch backend status during loadTimerState:', err);
