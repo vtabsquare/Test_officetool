@@ -737,22 +737,9 @@ export const handleAddEmployee = async (e) => {
 
         await createEmployee(payload);
 
-        state.employees.push({
-            id: payload.employee_id,
-            name: `${payload.first_name} ${payload.last_name}`.trim(),
-            email: payload.email,
-            location: payload.contact_number,
-            jobTitle: payload.designation,
-            contactNumber: payload.address,
-            department: payload.department,
-            role: '',
-            employmentType: 'Full-time',
-            status: payload.active ? 'Active' : 'Inactive',
-            employeeFlag: payload.employee_flag || 'Employee',
-            photo: photoDraft.cleared ? null : cleanDataUrl(photoDraft.dataUrl) || null
-        });
+        // Re-fetch to pull the saved Dataverse base64 (crc6f_profilepicture) and update cards/header.
         closeModal();
-        renderEmployeesPage();
+        await renderEmployeesPage();
     } catch (err) {
         console.error('Failed to create employee:', err);
         alert(`Failed to create employee: ${err.message || err}`);
@@ -870,10 +857,10 @@ export const handleUpdateEmployee = (e) => {
     };
 
     updateEmployee(employee_id, payload)
-        .then(() => {
+        .then((updated) => {
             try { if (state?.cache?.employees) state.cache.employees = {}; } catch {}
-            const photoData = cleanDataUrl(payload.profile_picture) || null;
-            const photoNormalized = normalizePhoto(photoData) || null;
+            const photoDataFromServer = updated?.photo || updated?.profile_picture || null;
+            const photoNormalized = normalizePhoto(photoDataFromServer) || normalizePhoto(cleanDataUrl(payload.profile_picture)) || null;
             const idx = state.employees.findIndex((x) => x.id === employee_id);
             if (idx >= 0) {
                 state.employees[idx] = {

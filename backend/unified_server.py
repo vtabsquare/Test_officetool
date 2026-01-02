@@ -6377,6 +6377,9 @@ def list_employees():
                 print(f"[SEARCH] DEBUG - Employee {idx + 1} retrieval:")
                 print(f"   Dataverse {field_map['contact']} = {contact_from_db}")
                 print(f"   Dataverse {field_map['address']} = {address_from_db}")
+
+            pic_raw = r.get(field_map.get('profile_picture')) if field_map.get('profile_picture') else None
+            photo = pic_raw if isinstance(pic_raw, str) and pic_raw.strip() else None
             
             items.append({
                 "employee_id": r.get(field_map['id']),
@@ -6390,7 +6393,8 @@ def list_employees():
                 "designation": r.get(field_map['designation']),
                 "doj": r.get(field_map['doj']),
                 "active": r.get(field_map['active']),
-                "employee_flag": r.get(field_map.get('employee_flag'))
+                "employee_flag": r.get(field_map.get('employee_flag')),
+                "photo": photo
             })
         print(f"   [SEND] Returning {len(items)} items for page {page}")
         print(f"{'='*60}\n")
