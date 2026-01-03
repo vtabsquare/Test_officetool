@@ -3560,21 +3560,6 @@ def checkout():
         else:
             status = "A"
 
-        # Human-readable duration from aggregated seconds
-        hours_int = total_seconds_today // 3600
-        minutes_int = (total_seconds_today % 3600) // 60
-        readable_duration = f"{hours_int} hour(s) {minutes_int} minute(s)"
-
-        payload = {
-            FIELD_CHECKOUT: checkout_time_str,
-            FIELD_DURATION: total_hours_today,
-            FIELD_STATUS: status_code
-        }
-        if FIELD_LOCATION and location_data:
-            payload[FIELD_LOCATION] = location_data
-
-        print(f"\n{'='*60}")
-        print("CHECK-OUT REQUEST")
         print(f"{'='*60}")
         print(f"Employee: {normalized_emp_id}")
         print(f"Record ID: {record_id}")
