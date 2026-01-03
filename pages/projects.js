@@ -1068,16 +1068,9 @@ const renderProjectDetails = (id, tab) => {
     window.location.hash = "#/time-projects";
     return;
   }
-  // CRM tab is currently disabled; normalize to boards without looping
-  if (tab === "crm") {
-    tab = "boards";
-    const qs = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    qs.set("tab", "boards");
-    window.location.hash = `#/time-projects?${qs.toString()}`;
-  }
   const { canManage } = getProjectAccess();
 
-  const tabs = ["details", "contributors", "boards"];
+  const tabs = ["details", "contributors", "boards", "crm"];
 
   const tabsHtml = `
   <div class="tabs">
@@ -2659,6 +2652,10 @@ async function deleteBoard(guid, projectId) {
 // DEFAULT COLUMNS (never disappear)
 // -----------------------------------------------
 const DEFAULT_COLS = ["New", "In Progress", "Hold", "Completed"];
+// make columns available globally for task details/status selects
+if (typeof window !== "undefined") {
+  window.GLOBAL_CRM_COLS = DEFAULT_COLS;
+}
 
 function getDefaultColor(name) {
   switch (name.trim().toLowerCase()) {
@@ -2675,11 +2672,66 @@ function getDefaultColor(name) {
   }
 }
 
+async function fetchProjectTasks(projectId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/projects/${projectId}/tasks`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Failed to load tasks");
+    }
+    return data.tasks || [];
+  } catch (err) {
+    console.error("fetchProjectTasks error:", err);
+    return { error: err.message || "Failed to load tasks" };
+  }
+}
+
 // -----------------------------------------------
-// CRM TAB (TEMP STUB TO FIX BUILD)
+// CRM TAB (Kanban)
 // -----------------------------------------------
-const crmTab = async () => {
-  return `<div class="placeholder-text">CRM board temporarily disabled.</div>`;
+const crmTab = async (project) => {
+  const boardParam =
+    new URLSearchParams(window.location.hash.split("?")[1] || "").get(
+      "board"
+    ) || "General";
+
+  const tasksResult = await fetchProjectTasks(project.id);
+  if (tasksResult.error) {
+    return `<div class="placeholder-text">Failed to load tasks: ${tasksResult.error}</div>`;
+  }
+  const tasks = Array.isArray(tasksResult) ? tasksResult : [];
+
+  const cols = DEFAULT_COLS;
+  const grouped = cols.map((col) => ({
+    name: col,
+    items: tasks.filter(
+      (t) =>
+        (t.task_status || "").toLowerCase() === col.toLowerCase() &&
+        (!t.board_name || t.board_name === boardParam)
+    ),
+  }));
+
+  const listsHtml = grouped
+    .map(
+      (col) => `
+      <div class="kan-list" data-col="${col.name}">
+        <div class="kan-head">
+          <strong>${col.name}</strong>
+          <span class="badge">${col.items.length}</span>
+        </div>
+        ${col.items
+          .map((t, idx) => taskCardHtml(t, idx))
+          .join("") || `<div class="placeholder-text">No tasks</div>`}
+      </div>
+    `
+    )
+    .join("");
+
+  return `
+    <div class="kan-wrap">
+      ${listsHtml}
+    </div>
+  `;
 };
 
 const taskCardHtml = (t, index) => {
