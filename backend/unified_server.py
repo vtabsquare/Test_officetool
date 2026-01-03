@@ -3502,7 +3502,10 @@ def checkout():
                             # If we had to generate a new attendance ID for an existing record,
                             # patch it back to Dataverse (best-effort).
                             if attendance_id and not rec.get(FIELD_ATTENDANCE_ID_CUSTOM):
-
+                                try:
+                                    update_record(ATTENDANCE_ENTITY, record_id, {FIELD_ATTENDANCE_ID_CUSTOM: attendance_id})
+                                except Exception:
+                                    pass
                             # Derive check-in timestamp from stored check-in time (not "now")
                             try:
                                 checkin_dt = datetime.strptime(checkin_time, "%H:%M:%S").replace(
