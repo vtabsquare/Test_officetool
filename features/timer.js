@@ -397,7 +397,8 @@ const storageAvailable = () => {
 export const loadTimerState = async () => {
     // Always prefer authoritative backend state if available
     const uid = String(state.user.id || '').toUpperCase();
-    const storageKey = uid ? `timerState_${uid}` : 'timerState';
+    const primaryKey = uid ? `timerState_${uid}` : 'timerState';
+    const fallbackKey = 'timerState';
     const baseUrl = (API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
     const canUseStorage = storageAvailable();
 
@@ -420,7 +421,7 @@ export const loadTimerState = async () => {
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                 if (canUseStorage) {
                     try {
-                        localStorage.setItem(storageKey, JSON.stringify({
+                        localStorage.setItem(primaryKey, JSON.stringify({
                             isRunning: true,
                             startTime: syncedStartTime,
                             date: todayStr,
@@ -434,23 +435,25 @@ export const loadTimerState = async () => {
                 updateTimerDisplay();
                 console.log(`✅ Timer restored from backend (elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
                 return;
-            } else {
-                // Backend says no active session; do not wipe local cache here.
-                // The socket server or API may have restarted and lost in-memory state;
-                // falling back to local cache below avoids resetting a running timer.
             }
         } catch (err) {
             console.warn('Failed to fetch backend status during loadTimerState:', err);
         }
     }
 
-    // 2) Fallback to local cache if backend unreachable
+    // 2) Fallback to local cache (per-user key first, then generic)
     let raw = null;
-    if (canUseStorage) {
+    const keysToTry = canUseStorage ? [primaryKey, fallbackKey] : [];
+    for (const k of keysToTry) {
         try {
-            raw = localStorage.getItem(storageKey);
+            raw = localStorage.getItem(k);
         } catch {
             raw = null;
+        }
+        if (raw) {
+            // Update active key to the one we found so downstream cleanup uses it
+            var storageKey = k;
+            break;
         }
     }
 
@@ -460,7 +463,7 @@ export const loadTimerState = async () => {
     try {
         parsed = JSON.parse(raw);
     } catch {
-        try { localStorage.removeItem(storageKey); } catch {}
+        try { localStorage.removeItem(storageKey || primaryKey); } catch {}
         return;
     }
 
@@ -476,12 +479,11 @@ export const loadTimerState = async () => {
         state.timer.isRunning = false;
         state.timer.startTime = null;
         state.timer.lastDuration = 0;
-        try { localStorage.removeItem(storageKey); } catch {}
+        try { localStorage.removeItem(storageKey || primaryKey); } catch {}
         return;
     }
 
     if (mode === 'running' && startTime) {
-        // With backend unreachable, fall back to local running state
         state.timer.isRunning = true;
         state.timer.startTime = startTime;
         state.timer.lastDuration = durationSeconds || 0;
