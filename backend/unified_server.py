@@ -3559,8 +3559,6 @@ def checkout():
             status = "HL"
         else:
             status = "A"
-        except Exception as e:
-            print(f"[WARN] Failed to persist login activity checkout for {key}: {e}")
 
         # Clear in-memory active session
         try:
@@ -3569,12 +3567,11 @@ def checkout():
         except Exception:
             pass
 
-        print("[OK] CHECK-OUT SUCCESS!")
-        print(f"{'='*60}\n")
-
         # Emit socket event for real-time multi-device sync
+
         try:
             totals = []
+
             try:
                 totals.append(int(total_seconds_today or 0))
             except Exception:
