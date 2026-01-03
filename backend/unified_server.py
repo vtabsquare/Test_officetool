@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone, date
 from calendar import monthrange
 from functools import wraps
 import random
-import string
+import threading
+import time
 import traceback
 import requests, re, base64
 import os
@@ -383,6 +384,8 @@ HALF_DAY_HOURS = 4.0
 FULL_DAY_HOURS = 9.0
 HALF_DAY_SECONDS = int(HALF_DAY_HOURS * 3600)
 FULL_DAY_SECONDS = int(FULL_DAY_HOURS * 3600)
+MIDDAY_PUNCH_INTERVAL_SECONDS = int(os.getenv("MIDDAY_PUNCH_INTERVAL_SECONDS", "300"))
+_midday_punch_thread_started = False
 
 # ================== LEAVE TRACKER CONFIGURATION ==================
 LEAVE_ENTITY = "crc6f_table14s"
@@ -740,6 +743,7 @@ def _init_threshold_flags(existing_hours: float = 0.0) -> dict:
 def _maybe_mark_thresholds(emp_key: str, record_id: str, total_seconds_today: int):
     if not emp_key or not record_id:
         return
+
     session = active_sessions.get(emp_key)
     if not session:
         return
@@ -766,6 +770,93 @@ def _maybe_mark_thresholds(emp_key: str, record_id: str, total_seconds_today: in
         print(f"[OK] Persisted live threshold ({'P' if flags['full'] else 'HL'}) for {emp_key}")
     except Exception as err:
         print(f"[WARN] Failed to persist live threshold for {emp_key}: {err}")
+
+def _elapsed_seconds_from_session(session: dict) -> int:
+    """Calculate elapsed seconds for an active session."""
+    try:
+        now = datetime.now()
+        elapsed_candidates = []
+        if session.get("checkin_timestamp") is not None:
+            try:
+                ts = float(session["checkin_timestamp"])
+                if ts > 1e12:  # ms
+                    ts = ts / 1000.0
+                elapsed_candidates.append(int(max(0, round(now.timestamp() - ts))))
+            except Exception:
+                pass
+        if session.get("checkin_datetime"):
+            try:
+                checkin_dt = datetime.fromisoformat(session["checkin_datetime"])
+                elapsed_candidates.append(int((now - checkin_dt).total_seconds()))
+            except Exception:
+                pass
+        if session.get("checkin_time"):
+            try:
+                ct_str = session["checkin_time"]
+                ct_dt = datetime.strptime(ct_str, "%H:%M:%S").replace(
+                    year=now.year, month=now.month, day=now.day
+                )
+                elapsed_candidates.append(int((now - ct_dt).total_seconds()))
+            except Exception:
+                pass
+        if elapsed_candidates:
+            return max(0, max(elapsed_candidates))
+    except Exception:
+        pass
+    return 0
+
+def _start_midday_punch_daemon():
+    """Start background thread to auto-punch HL/P without checkout."""
+    global _midday_punch_thread_started
+    if _midday_punch_thread_started:
+        return
+    _midday_punch_thread_started = True
+
+    def _loop():
+        interval = max(60, MIDDAY_PUNCH_INTERVAL_SECONDS or 300)
+        while True:
+            try:
+                now = datetime.now()
+                # Snapshot to avoid mutation during iteration
+                sessions_snapshot = list(active_sessions.items())
+                for key, session in sessions_snapshot:
+                    record_id = session.get("record_id")
+                    if not record_id:
+                        continue
+                    base_seconds = int(session.get("base_seconds") or 0)
+                    elapsed = _elapsed_seconds_from_session(session)
+                    total_seconds_today = max(0, base_seconds + elapsed)
+                    total_hours_today = round(total_seconds_today / 3600.0, 2)
+                    status = _classify_hours(total_hours_today)
+
+                    payload = {
+                        FIELD_STATUS: status,
+                        FIELD_DURATION: total_hours_today,
+                    }
+                    try:
+                        token = get_access_token()
+                        update_record(ATTENDANCE_ENTITY, record_id, payload)
+                        try:
+                            _upsert_login_activity(token, key, session.get("local_date") or now.date().isoformat(), {
+                                LA_FIELD_TOTAL_SECONDS: total_seconds_today
+                            })
+                        except Exception:
+                            pass
+                    except Exception as punch_err:
+                        print(f"[WARN] Mid-day punch failed for {key}: {punch_err}")
+            except Exception as loop_err:
+                print(f"[WARN] Mid-day punch loop error: {loop_err}")
+            time.sleep(interval)
+
+    threading.Thread(target=_loop, name="midday_punch", daemon=True).start()
+
+# Auto-start background puncher unless explicitly disabled
+if os.getenv("DISABLE_MIDDAY_PUNCH", "").lower() != "true":
+    try:
+        _start_midday_punch_daemon()
+        print(f"[MIDDAY] Background puncher started (interval={MIDDAY_PUNCH_INTERVAL_SECONDS}s)")
+    except Exception as e:
+        print(f"[MIDDAY] Failed to start background puncher: {e}")
 
 def _live_session_progress_hours(emp_id: str, target_date: str) -> float:
     """Return elapsed hours for an active session on target_date (if any)."""
@@ -3419,19 +3510,23 @@ def checkout():
                             # If we had to generate a new attendance ID for an existing record,
                             # patch it back to Dataverse (best-effort).
                             if attendance_id and not rec.get(FIELD_ATTENDANCE_ID_CUSTOM):
-                                try:
-                                    update_record(ATTENDANCE_ENTITY, record_id, {FIELD_ATTENDANCE_ID_CUSTOM: attendance_id})
-                                except Exception:
-                                    pass
 
-                            checkin_timestamp = int(now.timestamp() * 1000)  # milliseconds for JS
-                            checkin_seconds = int(now.timestamp())           # seconds for Dataverse Int32
+                            # Derive check-in timestamp from stored check-in time (not "now")
+                            try:
+                                checkin_dt = datetime.strptime(checkin_time, "%H:%M:%S").replace(
+                                    year=local_now.year, month=local_now.month, day=local_now.day
+                                )
+                            except Exception:
+                                checkin_dt = local_now
+                            checkin_timestamp = int(checkin_dt.timestamp() * 1000)  # milliseconds for JS
+                            checkin_seconds = int(checkin_dt.timestamp())           # seconds for Dataverse Int32
 
                             base_seconds = int(round(existing_hours * 3600)) if existing_hours else 0
                             active_sessions[key] = {
                                 "record_id": record_id,
                                 "checkin_time": checkin_time,
-                                "checkin_datetime": now.isoformat(),
+                                "checkin_datetime": checkin_dt.isoformat(),
+
                                 "checkin_timestamp": checkin_timestamp,
                                 "attendance_id": attendance_id,
                                 "local_date": formatted_date,
@@ -3679,14 +3774,13 @@ def get_status(employee_id):
 
         # Running totals baseline for today
         total_seconds_today = 0
+        formatted_date = date.today().isoformat()
 
         # Try to recover session from Dataverse if not in memory
         # This handles server restarts
         if key not in active_sessions:
 
             try:
-                from datetime import date as _date
-                formatted_date = _date.today().isoformat()
                 now = datetime.now()
                 token = get_access_token()
                 headers = {
@@ -3756,9 +3850,6 @@ def get_status(employee_id):
         # Fallback: derive active session from today's attendance record if check-in exists and checkout is missing
         if key not in active_sessions:
             try:
-                from datetime import date as _date
-                formatted_date = _date.today().isoformat()
-
                 token = get_access_token()
                 headers = {
                     "Authorization": f"Bearer {token}",
@@ -3812,8 +3903,6 @@ def get_status(employee_id):
         # NOTE: placed after attendance record recovery to avoid overriding real check-in with login heartbeat
         if key not in active_sessions:
             try:
-                from datetime import date as _date
-                formatted_date = _date.today().isoformat()
                 token = get_access_token()
                 login_rec = _fetch_login_activity_record(token, key, formatted_date)
                 if login_rec:
@@ -4015,18 +4104,40 @@ def get_status(employee_id):
         else:
             status = "A"
 
-        # Best-effort: persist status mid-day if we have a record_id (so monthly view reflects HL/P)
+        # Best-effort: persist status and current duration mid-day (auto punch HL/P without checkout)
         try:
             record_id = None
+            existing_status = None
+            existing_hours = None
             # Prefer active session record
             if active and active_sessions.get(key, {}).get("record_id"):
                 record_id = active_sessions[key]["record_id"]
             # Fallback to last fetched attendance record
             if not record_id and 'rec' in locals():
                 record_id = rec.get(FIELD_RECORD_ID) or rec.get("cr6f_table13id") or rec.get("id")
-            if record_id and FIELD_STATUS:
+                existing_status = rec.get(FIELD_STATUS)
+                try:
+                    existing_hours = float(rec.get(FIELD_DURATION) or "0")
+                except Exception:
+                    existing_hours = None
+            payload = {}
+            # Update status if improved (A -> HL -> P)
+            if FIELD_STATUS and record_id:
+                if existing_status is None or existing_status != status:
+                    payload[FIELD_STATUS] = status
+            # Update duration so Dataverse reflects live total without checkout
+            if record_id:
+                if existing_hours is None or total_hours_today > (existing_hours + 0.01):
+                    payload[FIELD_DURATION] = round(total_hours_today, 2)
+            if record_id and payload:
                 token = get_access_token()
-                update_record(ATTENDANCE_ENTITY, record_id, {FIELD_STATUS: status})
+                update_record(ATTENDANCE_ENTITY, record_id, payload)
+                try:
+                    _upsert_login_activity(token, key, formatted_date, {
+                        LA_FIELD_TOTAL_SECONDS: int(total_seconds_today)
+                    })
+                except Exception:
+                    pass
         except Exception as status_persist_err:
             print(f"[WARN] Failed to persist mid-day status for {key}: {status_persist_err}")
 
