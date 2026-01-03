@@ -1091,27 +1091,10 @@ const init = async () => {
   }
 
   if (sidebarEl && appContainer) {
-    // Reveal sidebar when hovering over the collapsed icon rail,
-    // and collapse again when moving sufficiently away.
-    document.addEventListener('mousemove', (event) => {
+    // Click-to-toggle behavior on desktop; always visible on mobile/tablet.
+    sidebarEl.addEventListener('click', () => {
       if (!isDesktopViewport()) return;
-
-      const sidebarWidth = sidebarEl.offsetWidth || 280;
-
-      if (sidebarHidden) {
-        // When collapsed, expand if cursor is within the visible rail area
-        const expandThreshold = sidebarWidth + 8;
-        if (event.clientX <= expandThreshold) {
-          setSidebarHidden(false);
-          return;
-        }
-      } else {
-        // When expanded, collapse once cursor moves far enough away from sidebar
-        const hideThreshold = sidebarWidth + 24;
-        if (event.clientX > hideThreshold) {
-          setSidebarHidden(true);
-        }
-      }
+      setSidebarHidden(!sidebarHidden);
     });
 
     // Ensure correct sidebar state when resizing
