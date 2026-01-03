@@ -12,10 +12,6 @@ export const getSidebarHTML = () => {
             <span class="sidebar-title">VTAB SQUARE</span>
         </a>
     </div>
-    <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Toggle sidebar" type="button">
-        <i class="fa-solid fa-chevron-left"></i>
-    </button>
-
     <ul class="sidebar-nav">
         <li><p class="nav-section-title">APPLICATIONS</p></li>
         <li><a href="#/" class="nav-link" data-page="home"><i class="fa-solid fa-house"></i> Home</a></li>
