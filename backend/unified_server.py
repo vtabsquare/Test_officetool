@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone, date
 from calendar import monthrange
 from functools import wraps
 import random
-import string
 import threading
 import time
 import traceback
@@ -17,7 +16,6 @@ import uuid
 import imaplib
 import email
 import jwt
-
 from email.header import decode_header
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
@@ -851,14 +849,6 @@ def _start_midday_punch_daemon():
             time.sleep(interval)
 
     threading.Thread(target=_loop, name="midday_punch", daemon=True).start()
-
-# Auto-start background puncher unless explicitly disabled
-if os.getenv("DISABLE_MIDDAY_PUNCH", "").lower() != "true":
-    try:
-        _start_midday_punch_daemon()
-        print(f"[MIDDAY] Background puncher started (interval={MIDDAY_PUNCH_INTERVAL_SECONDS}s)")
-    except Exception as e:
-        print(f"[MIDDAY] Failed to start background puncher: {e}")
 
 def _live_session_progress_hours(emp_id: str, target_date: str) -> float:
     """Return elapsed hours for an active session on target_date (if any)."""
@@ -3512,10 +3502,6 @@ def checkout():
                             # If we had to generate a new attendance ID for an existing record,
                             # patch it back to Dataverse (best-effort).
                             if attendance_id and not rec.get(FIELD_ATTENDANCE_ID_CUSTOM):
-                                try:
-                                    update_record(ATTENDANCE_ENTITY, record_id, {FIELD_ATTENDANCE_ID_CUSTOM: attendance_id})
-                                except Exception:
-                                    pass
 
                             # Derive check-in timestamp from stored check-in time (not "now")
                             try:
