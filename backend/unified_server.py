@@ -398,6 +398,10 @@ LEAVE_BALANCE_ENTITY_CANDIDATES = [
 ]
 LEAVE_BALANCE_ENTITY_RESOLVED = None
 
+# ================== EMPLOYEE CACHE FOR FAST LOADING ==================
+_employee_cache = {"data": None, "timestamp": 0}
+EMPLOYEE_CACHE_TTL = 300  # 5 minutes
+
 # ================== ASSET MANAGEMENT CONFIGURATION ==================
 API_BASE = f"{RESOURCE}/api/data/v9.2"
 ENTITY_NAME = "crc6f_hr_assetdetailses"  # Asset entity logical table name
@@ -6618,7 +6622,22 @@ def get_all_employees():
     """
     Return the complete employee master list for dropdowns, validation, or name lookups.
     Does NOT affect the existing paginated list_employees() function.
+    Uses in-memory cache for fast responses (5 minute TTL).
     """
+    import time as _time
+    global _employee_cache
+    
+    # Check cache first
+    now = _time.time()
+    if _employee_cache["data"] and (now - _employee_cache["timestamp"]) < EMPLOYEE_CACHE_TTL:
+        print(f"[CACHE HIT] Returning {len(_employee_cache['data'])} cached employees")
+        return jsonify({
+            "success": True,
+            "count": len(_employee_cache["data"]),
+            "employees": _employee_cache["data"],
+            "cached": True
+        }), 200
+    
     try:
         print(f"\n{'='*60}")
         print("[FETCH] FETCHING FULL EMPLOYEE MASTER LIST (NO PAGINATION)")
@@ -6705,13 +6724,18 @@ def get_all_employees():
                 "photo": photo
             })
 
-        print(f"[SEND] Returning {len(employees)} total employees")
+        # Update cache
+        _employee_cache["data"] = employees
+        _employee_cache["timestamp"] = _time.time()
+        
+        print(f"[SEND] Returning {len(employees)} total employees (cached)")
         print(f"{'='*60}\n")
 
         return jsonify({
             "success": True,
             "count": len(employees),
-            "employees": employees
+            "employees": employees,
+            "cached": False
         }), 200
 
     except Exception as e:
