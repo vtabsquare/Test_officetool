@@ -2246,25 +2246,29 @@ export const renderMeetPage = async () => {
         }
         .meet-employee-card {
             border: 1px solid rgba(148, 163, 184, 0.38);
-            border-radius: 16px;
-            padding: 12px 14px;
-            background: linear-gradient(145deg, #ffffff, #f8fafc);
+            border-radius: 12px;
+            padding: 14px 16px;
+            background: #ffffff;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
         }
         .meet-employee-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(79, 70, 229, 0.4);
-            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+            transform: translateY(-3px);
+            border-color: rgba(79, 70, 229, 0.5);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
         }
         .meet-employee-card.selected {
-            border-color: #16a34a;
-            background: radial-gradient(circle at 20% 20%, rgba(74, 222, 128, 0.18), transparent 45%), linear-gradient(135deg, #ecfdf3, #dcfce7);
-            box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.35), 0 12px 28px rgba(22, 163, 74, 0.15);
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2), 0 0 20px rgba(16, 185, 129, 0.3), 0 8px 24px rgba(16, 185, 129, 0.2);
+            transform: translateY(-2px);
+        }
+        .meet-employee-card.selected:hover {
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3), 0 0 28px rgba(16, 185, 129, 0.4), 0 12px 32px rgba(16, 185, 129, 0.25);
         }
         body.dark-theme .meet-employee-card {
             border-color: rgba(148, 163, 184, 0.55);
@@ -2692,111 +2696,133 @@ export const renderMeetPage = async () => {
             employeeCountEl.textContent = `${count} selected`;
         };
 
-        const getEmployeeMeta = (employeeId) => {
-            const key = String(employeeId || '').trim().toUpperCase();
-            return employeesDirectory.get(key) || null;
-        };
+const getEmployeeMeta = (employeeId) => {
+    const key = String(employeeId || '').trim().toUpperCase();
+    return employeesDirectory.get(key) || null;
+};
 
-        const loadEmployeeDirectory = async () => {
-            if (employeesDirectory.size) return employeesDirectory;
-            try {
-                // Use cached fetch for employees - cache for 5 minutes
-                const data = await cachedFetch('meet_employees_all', async () => {
-                    const resp = await fetch(`${API_BASE}/api/employees/all`);
-                    return await resp.json().catch(() => ({}));
-                }, TTL.LONG);
-                
-                if (data.success && Array.isArray(data.employees)) {
-                    data.employees.forEach((emp) => {
-                        const key = String(emp.employee_id || '').trim().toUpperCase();
-                        if (!key) return;
-                        employeesDirectory.set(key, {
-                            name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || key,
-                            email: emp.email || '',
-                            designation: emp.designation || '',
-                            department: emp.department || ''
-                        });
-                    });
+const loadEmployeeDirectory = async () => {
+    if (employeesDirectory.size) return employeesDirectory;
+    try {
+        console.log('[MEET] Loading employee directory from:', `${API_BASE}/api/employees/all`);
+        
+        // Use cached fetch with timeout for employees - cache for 5 minutes
+        const data = await Promise.race([
+            cachedFetch('meet_employees_all', async () => {
+                const resp = await fetch(`${API_BASE}/api/employees/all`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
                 }
-            } catch (err) {
-                console.error('Failed to load employees directory', err);
-                showToast('Unable to load employee directory. Some info may be missing.', 'warning');
-            }
-            return employeesDirectory;
-        };
-
-        const fetchProjects = async () => {
-            if (!projectGrid) return;
-            projectGrid.innerHTML = `
-                <div class="placeholder-text" style="grid-column: 1 / -1;">
-                    <i class="fa-solid fa-spinner fa-spin" style="color:#007bff; margin-bottom: 0.5rem;"></i>
-                    <p>Loading projects...</p>
-                </div>
-            `;
-            try {
-                const resp = await fetch(`${API_BASE}/api/projects?sort=name`);
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.success) {
-                    throw new Error(data.error || `Failed to load projects (${resp.status})`);
-                }
-                projectsCache = data.projects || [];
-                renderProjectCards();
-            } catch (err) {
-                console.error('Failed to load projects', err);
-                if (projectGrid) {
-                    projectGrid.innerHTML = `
-                        <div class="placeholder-text" style="grid-column: 1 / -1; color:#dc2626;">
-                            <i class="fa-solid fa-triangle-exclamation" style="margin-bottom: 0.5rem;"></i>
-                            <p>${err?.message || 'Failed to load projects'}</p>
-                        </div>
-                    `;
-                }
-            }
-        };
-
-        const renderProjectCards = () => {
-            if (!projectGrid) return;
-            projectGrid.innerHTML = '';
-            if (!projectsCache.length) {
-                projectGrid.innerHTML = `
-                    <div class="placeholder-text" style="grid-column: 1 / -1;">
-                        <p>No projects available.</p>
-                    </div>
-                `;
-                return;
-            }
-            projectsCache.forEach((project) => {
-                const projectId = (project.crc6f_projectid || '').toUpperCase();
-                const card = document.createElement('div');
-                card.className = 'meet-project-card';
-                card.innerHTML = `
-                    <div>
-                        <p style="font-size:12px; color:#6b7280; margin:0;">${projectId}</p>
-                        <h4 style="margin:4px 0 6px;">${project.crc6f_projectname || 'Untitled project'}</h4>
-                        <p style="font-size:12px; color:#4b5563; margin:0 0 6px;">
-                            ${project.crc6f_projectstatus || 'Status unknown'} · ${project.crc6f_noofcontributors || 0} contributors
-                        </p>
-                        ${project.crc6f_projectdescription ? `<p style="font-size:12px; color:#6b7280; margin:0;">${project.crc6f_projectdescription}</p>` : ''}
-                    </div>
-                    <button class="btn btn-sm btn-outline-primary" data-role="add-project" data-project-id="${projectId}">
-                        <i class="fa-solid fa-plus"></i> Add
-                    </button>
-                `;
-                projectGrid.appendChild(card);
-            });
-
-            projectGrid.querySelectorAll('button[data-role="add-project"]').forEach(btn => {
-                btn.addEventListener('click', async (ev) => {
-                    const pid = ev.currentTarget.getAttribute('data-project-id');
-                    await handleAddProject(pid, ev.currentTarget);
+                return await resp.json();
+            }, TTL.LONG),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout after 15s')), 15000)
+            )
+        ]);
+        
+        console.log('[MEET] Employee data received:', data);
+        
+        if (data.success && Array.isArray(data.employees)) {
+            data.employees.forEach((emp) => {
+                const key = String(emp.employee_id || '').trim().toUpperCase();
+                if (!key) return;
+                employeesDirectory.set(key, {
+                    name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || key,
+                    email: emp.email || '',
+                    designation: emp.designation || '',
+                    department: emp.department || ''
                 });
             });
-        };
+            console.log(`[MEET] Loaded ${employeesDirectory.size} employees into directory`);
+        } else {
+            console.warn('[MEET] Invalid employee data format:', data);
+        }
+    } catch (err) {
+        console.error('[MEET] Failed to load employees directory:', err);
+        showToast(`Unable to load employee directory: ${err.message}`, 'error');
+    }
+    return employeesDirectory;
+};
 
-        const fetchProjectContributors = async (projectId) => {
-            const safeId = encodeURIComponent(projectId);
-            const resp = await fetch(`${API_BASE}/api/projects/${safeId}/contributors`);
-            const data = await resp.json().catch(() => ({}));
+const fetchProjects = async () => {
+    if (!projectGrid) return;
+    projectGrid.innerHTML = `
+        <div class="placeholder-text" style="grid-column: 1 / -1;">
+            <i class="fa-solid fa-spinner fa-spin" style="color:#007bff; margin-bottom: 0.5rem;"></i>
+            <p>Loading projects...</p>
+        </div>
+    `;
+    try {
+        const resp = await fetch(`${API_BASE}/api/projects?sort=name`);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) {
+            throw new Error(data.error || `Failed to load projects (${resp.status})`);
+        }
+        projectsCache = data.projects || [];
+        renderProjectCards();
+    } catch (err) {
+        console.error('Failed to load projects', err);
+        if (projectGrid) {
+            projectGrid.innerHTML = `
+                <div class="placeholder-text" style="grid-column: 1 / -1; color:#dc2626;">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-bottom: 0.5rem;"></i>
+                    <p>${err?.message || 'Failed to load projects'}</p>
+                </div>
+            `;
+        }
+    }
+};
+
+const renderProjectCards = () => {
+    if (!projectGrid) return;
+    projectGrid.innerHTML = '';
+    if (!projectsCache.length) {
+        projectGrid.innerHTML = `
+            <div class="placeholder-text" style="grid-column: 1 / -1;">
+                <p>No projects available.</p>
+            </div>
+        `;
+        return;
+    }
+    projectsCache.forEach((project) => {
+        const projectId = (project.crc6f_projectid || '').toUpperCase();
+        const card = document.createElement('div');
+        card.className = 'meet-project-card';
+        card.innerHTML = `
+            <div>
+                <p style="font-size:12px; color:#6b7280; margin:0;">${projectId}</p>
+                <h4 style="margin:4px 0 6px;">${project.crc6f_projectname || 'Untitled project'}</h4>
+                <p style="font-size:12px; color:#4b5563; margin:0 0 6px;">
+                    ${project.crc6f_projectstatus || 'Status unknown'} · ${project.crc6f_noofcontributors || 0} contributors
+                </p>
+                ${project.crc6f_projectdescription ? `<p style="font-size:12px; color:#6b7280; margin:0;">${project.crc6f_projectdescription}</p>` : ''}
+            </div>
+            <button class="btn btn-sm btn-outline-primary" data-role="add-project" data-project-id="${projectId}">
+                <i class="fa-solid fa-plus"></i> Add
+            </button>
+        `;
+        projectGrid.appendChild(card);
+    });
+
+    projectGrid.querySelectorAll('button[data-role="add-project"]').forEach(btn => {
+        btn.addEventListener('click', async (ev) => {
+            const pid = ev.currentTarget.getAttribute('data-project-id');
+            await handleAddProject(pid, ev.currentTarget);
+        });
+    });
+};
+
+const fetchProjectContributors = async (projectId) => {
+    const safeId = encodeURIComponent(projectId);
+    const resp = await fetch(`${API_BASE}/api/projects/${safeId}/contributors`);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false || data.ok === false) {
+        throw new Error(data.error || 'Failed to load project contributors');
+    }
+    return data.contributors || data.items || [];
+};
             if (!resp.ok || data.success === false || data.ok === false) {
                 throw new Error(data.error || 'Failed to load project contributors');
             }
