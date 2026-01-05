@@ -2310,14 +2310,16 @@ def checkin():
                 except Exception:
                     pass
 
-            checkin_timestamp = int(now.timestamp() * 1000)  # milliseconds for JS
-            checkin_seconds = int(now.timestamp())           # seconds for Dataverse Int32
+            # Use local_now (client timezone) for timestamp to ensure consistency
+            # This prevents timezone mismatch between stored time string and timestamp
+            checkin_timestamp = int(local_now.timestamp() * 1000)  # milliseconds for JS
+            checkin_seconds = int(local_now.timestamp())           # seconds for Dataverse Int32
 
             base_seconds = int(round(existing_hours * 3600)) if existing_hours else 0
             active_sessions[key] = {
                 "record_id": record_id,
                 "checkin_time": formatted_time,
-                "checkin_datetime": now.isoformat(),
+                "checkin_datetime": local_now.isoformat(),
                 "checkin_timestamp": checkin_timestamp,
                 "attendance_id": attendance_id,
                 "local_date": formatted_date,
@@ -2398,13 +2400,14 @@ def checkin():
         )
 
         if record_id:
-            checkin_timestamp = int(now.timestamp() * 1000)  # milliseconds for JS
-            checkin_seconds = int(now.timestamp())           # seconds for Dataverse Int32
+            # Use local_now (client timezone) for timestamp to ensure consistency
+            checkin_timestamp = int(local_now.timestamp() * 1000)  # milliseconds for JS
+            checkin_seconds = int(local_now.timestamp())           # seconds for Dataverse Int32
 
             active_sessions[key] = {
                 "record_id": record_id,
                 "checkin_time": formatted_time,
-                "checkin_datetime": now.isoformat(),
+                "checkin_datetime": local_now.isoformat(),
                 "checkin_timestamp": checkin_timestamp,
                 "attendance_id": random_attendance_id,
                 "local_date": formatted_date,
