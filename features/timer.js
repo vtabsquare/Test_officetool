@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../config.js';
 import { renderMyAttendancePage } from '../pages/attendance.js';
 
 const HALF_DAY_SECONDS = 4 * 3600;
-const FULL_DAY_SECONDS = 9 * 3600;
+const FULL_DAY_SECONDS = 8 * 3600;
 
 const deriveAttendanceStatusFromSeconds = (seconds = 0) => {
     if (seconds >= FULL_DAY_SECONDS) return 'P';
@@ -394,20 +394,96 @@ const storageAvailable = () => {
     }
 };
 
+/**
+ * Get today's date string in YYYY-MM-DD format
+ */
+const getTodayDateStr = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * Schedule a timer reset at midnight (12:00 AM).
+ * This ensures the timer resets for a new day automatically.
+ */
+let midnightResetTimeoutId = null;
+
+const scheduleMidnightReset = () => {
+    if (midnightResetTimeoutId) {
+        clearTimeout(midnightResetTimeoutId);
+        midnightResetTimeoutId = null;
+    }
+
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0); // Next midnight
+    const msUntilMidnight = midnight.getTime() - now.getTime();
+
+    console.log(`[TIMER] Scheduling midnight reset in ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
+
+    midnightResetTimeoutId = setTimeout(() => {
+        console.log('[TIMER] Midnight reached - resetting timer for new day');
+        resetTimerForNewDay();
+        // Schedule the next midnight reset
+        scheduleMidnightReset();
+    }, msUntilMidnight);
+};
+
+/**
+ * Reset the timer state for a new day.
+ * Called at midnight to clear the previous day's timer.
+ */
+const resetTimerForNewDay = () => {
+    const uid = String(state.user.id || '').toUpperCase();
+    const primaryKey = uid ? `timerState_${uid}` : 'timerState';
+
+    // Stop any running timer
+    if (state.timer.intervalId) {
+        clearInterval(state.timer.intervalId);
+        state.timer.intervalId = null;
+    }
+
+    // Reset timer state
+    state.timer.isRunning = false;
+    state.timer.startTime = null;
+    state.timer.lastDuration = 0;
+    state.timer.lastAutoStatus = null;
+
+    // Clear localStorage for the old day
+    if (storageAvailable()) {
+        try {
+            localStorage.removeItem(primaryKey);
+            localStorage.removeItem('timerState');
+        } catch {}
+    }
+
+    // Update UI
+    updateTimerButton();
+    updateTimerDisplay();
+
+    console.log('[TIMER] Timer reset for new day completed');
+};
+
 export const loadTimerState = async () => {
+    // Schedule midnight reset for automatic daily timer reset
+    scheduleMidnightReset();
+
     // Always prefer authoritative backend state if available
     const uid = String(state.user.id || '').toUpperCase();
     const primaryKey = uid ? `timerState_${uid}` : 'timerState';
     const fallbackKey = 'timerState';
     const baseUrl = (API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
     const canUseStorage = storageAvailable();
+    const todayStr = getTodayDateStr();
 
-    // 1) Backend-first: if backend says we're checked in, restore and return
+    // 1) Backend-first: fetch status from backend to sync across devices
     if (uid) {
         try {
             const response = await fetch(`${baseUrl}/api/status/${uid}`);
             const statusData = await response.json();
+            
             if (statusData.checked_in) {
+                // User is currently checked in - restore running timer
                 const backendElapsed = typeof statusData.elapsed_seconds === 'number' ? statusData.elapsed_seconds : 0;
                 const backendTotal = typeof statusData.total_seconds_today === 'number' ? statusData.total_seconds_today : 0;
                 const baseFromBackend = Math.max(0, backendTotal - backendElapsed);
@@ -417,8 +493,6 @@ export const loadTimerState = async () => {
                 state.timer.startTime = syncedStartTime;
                 state.timer.lastDuration = baseFromBackend;
 
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                 if (canUseStorage) {
                     try {
                         localStorage.setItem(primaryKey, JSON.stringify({
@@ -432,9 +506,36 @@ export const loadTimerState = async () => {
                 }
                 if (state.timer.intervalId) clearInterval(state.timer.intervalId);
                 state.timer.intervalId = setInterval(updateTimerDisplay, 1000);
+                updateTimerButton();
                 updateTimerDisplay();
-                console.log(`✅ Timer restored from backend (elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
+                console.log(`✅ Timer restored from backend (running, elapsed: ${backendElapsed}s, base: ${baseFromBackend}s)`);
                 return;
+            } else {
+                // User is checked out - restore stopped state with total seconds
+                const backendTotal = typeof statusData.total_seconds_today === 'number' ? statusData.total_seconds_today : 0;
+                
+                if (backendTotal > 0) {
+                    // User has worked today but is currently checked out
+                    state.timer.isRunning = false;
+                    state.timer.startTime = null;
+                    state.timer.lastDuration = backendTotal;
+
+                    if (canUseStorage) {
+                        try {
+                            localStorage.setItem(primaryKey, JSON.stringify({
+                                isRunning: false,
+                                startTime: null,
+                                date: todayStr,
+                                mode: 'stopped',
+                                durationSeconds: backendTotal,
+                            }));
+                        } catch {}
+                    }
+                    updateTimerButton();
+                    updateTimerDisplay();
+                    console.log(`✅ Timer restored from backend (stopped, total: ${backendTotal}s)`);
+                    return;
+                }
             }
         } catch (err) {
             console.warn('Failed to fetch backend status during loadTimerState:', err);
@@ -471,9 +572,6 @@ export const loadTimerState = async () => {
     const startTime = parsed.startTime;
     const savedDate = parsed.date;
     const durationSeconds = typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : 0;
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     if (savedDate && savedDate !== todayStr) {
         state.timer.isRunning = false;

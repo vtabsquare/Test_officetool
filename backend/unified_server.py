@@ -379,8 +379,9 @@ FIELD_DURATION = "crc6f_duration"
 FIELD_DURATION_INTEXT = "crc6f_duration_intext"
 FIELD_ATTENDANCE_ID_CUSTOM = "crc6f_attendanceid"
 FIELD_RECORD_ID = "crc6f_table13id"
+FIELD_STATUS = "crc6f_status"
 HALF_DAY_HOURS = 4.0
-FULL_DAY_HOURS = 9.0
+FULL_DAY_HOURS = 8.0
 HALF_DAY_SECONDS = int(HALF_DAY_HOURS * 3600)
 FULL_DAY_SECONDS = int(FULL_DAY_HOURS * 3600)
 
@@ -3546,19 +3547,47 @@ def checkout():
         # Total seconds for today = base + this session
         total_seconds_today = session.get("base_seconds", 0) + session_seconds
         total_hours_today = round(total_seconds_today / 3600, 2)
-        status_code = "P"
-        if total_hours_today < HALF_DAY_HOURS:
-            status_code = "A"
-        elif total_hours_today < FULL_DAY_HOURS:
-            status_code = "HL"
+        
+        # Generate readable duration string
+        hours_int = int(total_hours_today)
+        minutes_int = int((total_seconds_today % 3600) / 60)
+        readable_duration = f"{hours_int} hour(s) {minutes_int} minute(s)"
 
-        # Classification based on total hours today
-        if total_hours_today >= 9.0:
+        # Classification based on total hours today (using constants)
+        if total_hours_today >= FULL_DAY_HOURS:
             status = "P"
-        elif total_hours_today >= 4.0:
+        elif total_hours_today >= HALF_DAY_HOURS:
             status = "HL"
         else:
             status = "A"
+
+        # Update Dataverse attendance record with checkout time, duration, and status
+        if record_id:
+            try:
+                update_payload = {
+                    FIELD_CHECKOUT: checkout_time_str,
+                    FIELD_DURATION: str(total_hours_today),
+                    FIELD_DURATION_INTEXT: readable_duration,
+                }
+                if FIELD_STATUS:
+                    update_payload[FIELD_STATUS] = status
+                update_record(ATTENDANCE_ENTITY, record_id, update_payload)
+                print(f"[OK] Updated Dataverse attendance record {record_id} with checkout: {checkout_time_str}, duration: {total_hours_today}h, status: {status}")
+            except Exception as update_err:
+                print(f"[WARN] Failed to update Dataverse attendance record on checkout: {update_err}")
+
+        # Persist checkout to login activity for durability
+        try:
+            token = get_access_token()
+            formatted_date = local_now.date().isoformat()
+            checkout_seconds = int(local_now.timestamp())
+            _upsert_login_activity(token, normalized_emp_id, formatted_date, {
+                LA_FIELD_CHECKOUT_TIME: checkout_time_str,
+                LA_FIELD_CHECKOUT_TS: checkout_seconds,
+                LA_FIELD_TOTAL_SECONDS: total_seconds_today,
+            })
+        except Exception as la_err:
+            print(f"[WARN] Failed to persist checkout to login activity: {la_err}")
 
         # Clear in-memory active session
         try:
@@ -3568,10 +3597,8 @@ def checkout():
             pass
 
         # Emit socket event for real-time multi-device sync
-
         try:
             totals = []
-
             try:
                 totals.append(int(total_seconds_today or 0))
             except Exception:
@@ -3583,7 +3610,6 @@ def checkout():
             try:
                 base_sec = int(session.get("base_seconds") or 0)
                 totals.append(base_sec)
-                # If we have base seconds from earlier sessions, add this session's duration too
                 totals.append(base_sec + int(session_seconds or 0))
             except Exception:
                 pass
