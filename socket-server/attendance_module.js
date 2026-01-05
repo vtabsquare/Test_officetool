@@ -48,6 +48,14 @@ module.exports = (io) => {
         const now = Date.now();
         const elapsedMs = now - timer.checkinTimestamp;
         const elapsedSeconds = Math.floor(elapsedMs / 1000);
+        
+        // Guard against negative elapsed time (timezone/timestamp issues)
+        // If elapsed is negative or unreasonably large, don't send sync - let frontend use backend
+        if (elapsedSeconds < 0 || elapsedSeconds > 24 * 3600) {
+          console.log(`[ATTENDANCE] Skipping sync for ${uid}: invalid elapsed=${elapsedSeconds}s (timestamp issue)`);
+          return;
+        }
+        
         const totalSeconds = (timer.baseSeconds || 0) + elapsedSeconds;
         const status = deriveStatus(totalSeconds);
 
@@ -150,6 +158,13 @@ module.exports = (io) => {
         const now = Date.now();
         const elapsedMs = now - timer.checkinTimestamp;
         const elapsedSeconds = Math.floor(elapsedMs / 1000);
+        
+        // Guard against negative elapsed time (timezone/timestamp issues)
+        if (elapsedSeconds < 0 || elapsedSeconds > 24 * 3600) {
+          console.log(`[ATTENDANCE] Skipping request-sync for ${uid}: invalid elapsed=${elapsedSeconds}s`);
+          return;
+        }
+        
         const totalSeconds = (timer.baseSeconds || 0) + elapsedSeconds;
         const status = deriveStatus(totalSeconds);
 
@@ -191,6 +206,12 @@ module.exports = (io) => {
 
       const elapsedMs = now - timer.checkinTimestamp;
       const elapsedSeconds = Math.floor(elapsedMs / 1000);
+      
+      // Skip if elapsed time is invalid (negative or > 24 hours)
+      if (elapsedSeconds < 0 || elapsedSeconds > 24 * 3600) {
+        continue;
+      }
+      
       const totalSeconds = (timer.baseSeconds || 0) + elapsedSeconds;
       const newStatus = deriveStatus(totalSeconds);
 

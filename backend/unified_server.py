@@ -3761,9 +3761,10 @@ def get_status(employee_id):
         # First, fetch today's attendance record to check checkout status
         # This determines if we should recover an active session or return checked-out state
         today_attendance_rec = None
+        from datetime import date as _date
+        formatted_date = _date.today().isoformat()
+        
         try:
-            from datetime import date as _date
-            formatted_date = _date.today().isoformat()
             token = get_access_token()
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -3782,7 +3783,8 @@ def get_status(employee_id):
                 if vals:
                     today_attendance_rec = vals[0]
                     checkout_time_rec = today_attendance_rec.get(FIELD_CHECKOUT)
-                    if checkout_time_rec:
+                    print(f"[DEBUG] Attendance record for {key}: checkout={checkout_time_rec}, duration={today_attendance_rec.get(FIELD_DURATION)}")
+                    if checkout_time_rec and str(checkout_time_rec).strip():
                         # User has checked out today - don't recover session
                         checked_out_today = True
                         try:
@@ -3790,9 +3792,29 @@ def get_status(employee_id):
                             total_seconds_today = int(round(hours * 3600))
                         except Exception:
                             total_seconds_today = 0
-                        print(f"[INFO] User {key} has checked out today with {total_seconds_today}s")
+                        print(f"[INFO] User {key} has checked out today with {total_seconds_today}s (from attendance record)")
         except Exception as prefetch_err:
             print(f"[WARN] Failed to prefetch attendance record: {prefetch_err}")
+
+        # CRITICAL: Also check login activity for checkout - more reliable than Dataverse propagation
+        if not checked_out_today:
+            try:
+                token = get_access_token()
+                la_rec = _fetch_login_activity_record(token, key, formatted_date)
+                if la_rec:
+                    la_checkout = la_rec.get(LA_FIELD_CHECKOUT_TIME)
+                    la_total = la_rec.get(LA_FIELD_TOTAL_SECONDS)
+                    print(f"[DEBUG] Login activity for {key}: checkout={la_checkout}, total_seconds={la_total}")
+                    if la_checkout and str(la_checkout).strip():
+                        checked_out_today = True
+                        if la_total is not None:
+                            try:
+                                total_seconds_today = max(total_seconds_today, int(la_total))
+                            except Exception:
+                                pass
+                        print(f"[INFO] User {key} has checked out today with {total_seconds_today}s (from login activity)")
+            except Exception as la_err:
+                print(f"[WARN] Failed to check login activity for checkout: {la_err}")
 
         # Try to recover session from Dataverse if not in memory AND not checked out
         # This handles server restarts
