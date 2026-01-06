@@ -469,7 +469,7 @@ export async function handleAttendanceChanged(data) {
 
 // These functions maintain API compatibility with the old timer.js
 export const loadTimerState = initializeAttendance;
-export { updateTimerDisplay as updateTimerButton };
+// updateTimerButton is already exported above
 
 // Get current state for other components
 export function getAttendanceState() {
