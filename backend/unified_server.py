@@ -7071,6 +7071,15 @@ def create_employee():
         if field_map.get('quota_hours'):
             payload[field_map['quota_hours']] = "9"
             print(f"   [ALARM] Set quota hours: 9")
+        
+        _apply_employee_rpt(payload)
+        
+        created = create_record(entity_set, payload)
+        
+        # Auto-create login record for the new employee
+        if email:
+            try:
+                print(f"\n   [USER] Creating login record for {email}")
                 
                 # Check if login already exists
                 login_table = get_login_table(token)
