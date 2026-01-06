@@ -5,7 +5,7 @@ import { renderMyAttendancePage } from '../pages/attendance.js';
 import { recordUserAction, markBackendStateLoaded } from './attendanceSocket.js';
 
 const HALF_DAY_SECONDS = 4 * 3600;
-const FULL_DAY_SECONDS = 8 * 3600;
+const FULL_DAY_SECONDS = 9 * 3600;
 
 const deriveAttendanceStatusFromSeconds = (seconds = 0) => {
     if (seconds >= FULL_DAY_SECONDS) return 'P';

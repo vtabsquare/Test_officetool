@@ -35,6 +35,54 @@ const THEME_STORAGE_KEY = 'theme';
 const THEME_OVERRIDE_KEY = 'theme_override';
 let themeAutoTimer = null;
 
+const readTimerStateFromStorage = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const timerStateWeight = (obj) => {
+  try {
+    const isRunning = !!obj.isRunning || obj.mode === 'running';
+    const seconds = typeof obj.durationSeconds === 'number' ? obj.durationSeconds : 0;
+    return { isRunning, seconds };
+  } catch {
+    return { isRunning: false, seconds: 0 };
+  }
+};
+
+const migrateTimerStateKey = (fromId, toId) => {
+  const from = String(fromId || '').trim().toUpperCase();
+  const to = String(toId || '').trim().toUpperCase();
+  if (!from || !to || from === to) return;
+  const fromKey = `timerState_${from}`;
+  const toKey = `timerState_${to}`;
+
+  let fromState = readTimerStateFromStorage(fromKey);
+  const toState = readTimerStateFromStorage(toKey);
+  if (!fromState) {
+    fromState = readTimerStateFromStorage('timerState');
+  }
+  if (!fromState) return;
+
+  const a = timerStateWeight(fromState);
+  const b = timerStateWeight(toState || {});
+  const shouldMove = !toState || a.isRunning || (!b.isRunning && a.seconds >= b.seconds);
+  if (!shouldMove) return;
+
+  try {
+    localStorage.setItem(toKey, JSON.stringify(fromState));
+  } catch { }
+  try { localStorage.removeItem(fromKey); } catch { }
+  try { localStorage.removeItem('timerState'); } catch { }
+};
+
 const applyAppTheme = (theme) => {
   const body = document.body;
   body.classList.toggle('dark-theme', theme === 'dark');
@@ -712,7 +760,9 @@ const init = async () => {
             if (emailToMatch) {
               const match = (all.items || []).find(e => (e.email || '').toLowerCase() === emailToMatch);
               if (match && match.employee_id) {
+                const previousId = state.user.id;
                 state.user.id = match.employee_id;
+                migrateTimerStateKey(previousId, state.user.id);
                 // hydrate avatar from employee directory (crc6f_profilepicture)
                 if (match.photo) state.user.avatarUrl = match.photo;
                 try { localStorage.setItem('auth', JSON.stringify({ authenticated: true, user: state.user })); } catch { }

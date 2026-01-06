@@ -2,7 +2,7 @@
 // Handles multi-device check-in/check-out synchronization and auto-status updates
 
 const HALF_DAY_SECONDS = 4 * 3600; // 4 hours
-const FULL_DAY_SECONDS = 8 * 3600; // 8 hours
+const FULL_DAY_SECONDS = 9 * 3600; // 9 hours
 
 // In-memory store of active check-ins (synced from backend)
 const activeTimers = {};

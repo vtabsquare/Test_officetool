@@ -381,7 +381,7 @@ FIELD_ATTENDANCE_ID_CUSTOM = "crc6f_attendanceid"
 FIELD_RECORD_ID = "crc6f_table13id"
 FIELD_STATUS = None  # Field doesn't exist in crc6f_table13 - status calculated from duration
 HALF_DAY_HOURS = 4.0
-FULL_DAY_HOURS = 8.0
+FULL_DAY_HOURS = 9.0
 HALF_DAY_SECONDS = int(HALF_DAY_HOURS * 3600)
 FULL_DAY_SECONDS = int(FULL_DAY_HOURS * 3600)
 
@@ -906,8 +906,19 @@ def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload:
     }
 
     if existing and existing.get(LOGIN_ACTIVITY_PRIMARY_FIELD):
+        reopening = False
+        try:
+            existing_checkout = existing.get(LA_FIELD_CHECKOUT_TIME) or existing.get(LA_FIELD_CHECKOUT_TS)
+            clearing_checkout = (
+                (LA_FIELD_CHECKOUT_TIME in patch_payload and patch_payload.get(LA_FIELD_CHECKOUT_TIME) is None)
+                or (LA_FIELD_CHECKOUT_TS in patch_payload and patch_payload.get(LA_FIELD_CHECKOUT_TS) is None)
+            )
+            reopening = bool(existing_checkout and clearing_checkout)
+        except Exception:
+            reopening = False
+
         # Protect earliest check-in and accumulated base seconds from being overwritten by later retries
-        if LA_FIELD_CHECKIN_TS in patch_payload:
+        if (not reopening) and LA_FIELD_CHECKIN_TS in patch_payload:
             existing_ts = existing.get(LA_FIELD_CHECKIN_TS)
             incoming_ts = patch_payload.get(LA_FIELD_CHECKIN_TS)
             try:
@@ -917,7 +928,7 @@ def _upsert_login_activity(token: str, employee_id: str, date_str: str, payload:
             except Exception:
                 pass
 
-        if LA_FIELD_CHECKIN_TIME in patch_payload:
+        if (not reopening) and LA_FIELD_CHECKIN_TIME in patch_payload:
             if existing.get(LA_FIELD_CHECKIN_TIME):
                 # keep original check-in time to avoid overwriting with a later/local-only value
                 patch_payload.pop(LA_FIELD_CHECKIN_TIME, None)
@@ -1355,6 +1366,59 @@ def format_employee_id(emp_number):
     emp_id = f"EMP{emp_number:03d}"
     print(f"   [USER] Formatted Employee ID: {emp_id}")
     return emp_id
+
+
+def _resolve_employee_identifier(raw_identifier: str, token: str = None) -> str:
+    raw = (raw_identifier or "").strip()
+    if not raw:
+        return ""
+
+    upper = raw.upper()
+    if upper.isdigit():
+        try:
+            return format_employee_id(int(upper))
+        except Exception:
+            return upper
+    if upper.startswith("EMP"):
+        return upper
+
+    if "@" in raw:
+        try:
+            token = token or get_access_token()
+            entity_set = get_employee_entity_set(token)
+            field_map = get_field_map(entity_set)
+            email_field = field_map.get("email")
+            id_field = field_map.get("id")
+            if not email_field or not id_field:
+                return upper
+
+            safe_email = _safe_odata_string(raw)
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "OData-MaxVersion": "4.0",
+                "OData-Version": "4.0",
+            }
+            url = (
+                f"{BASE_URL}/{entity_set}"
+                f"?$top=1&$select={id_field}"
+                f"&$filter={email_field} eq '{safe_email}'"
+            )
+            resp = requests.get(url, headers=headers, timeout=20)
+            if resp.status_code == 200:
+                vals = resp.json().get("value", [])
+                if vals:
+                    emp_val = vals[0].get(id_field)
+                    if emp_val is None:
+                        return upper
+                    emp_str = str(emp_val).strip().upper()
+                    if emp_str.isdigit():
+                        return format_employee_id(int(emp_str))
+                    return emp_str
+        except Exception:
+            return upper
+
+    return upper
 
 
 def calculate_leave_days(start_date, end_date):
@@ -2206,10 +2270,9 @@ def checkin():
         client_time = data.get('client_time')
         timezone_str = data.get('timezone')
 
-        # Normalize employee ID to canonical EMP### form for storage / lookups
-        normalized_emp_id = employee_id_raw.upper()
-        if normalized_emp_id.isdigit():
-            normalized_emp_id = format_employee_id(int(normalized_emp_id))
+        normalized_emp_id = _resolve_employee_identifier(employee_id_raw)
+        if not normalized_emp_id:
+            return jsonify({"success": False, "error": "Employee ID is required"}), 400
         key = normalized_emp_id
 
         now = datetime.now()
@@ -2251,13 +2314,21 @@ def checkin():
                     LA_FIELD_CHECKIN_TS: int(checkin_ts / 1000) if checkin_ts is not None else None,
                     LA_FIELD_BASE_SECONDS: base_seconds,
                     LA_FIELD_CHECKIN_LOCATION: _login_activity_location_string(event),
+                    LA_FIELD_CHECKOUT_TIME: None,
+                    LA_FIELD_CHECKOUT_TS: None,
                 }
-                _upsert_login_activity(token, normalized_emp_id, local_date, {k: v for k, v in patch.items() if v is not None})
+                patch_to_send = {
+                    k: v
+                    for k, v in patch.items()
+                    if (v is not None) or (k in (LA_FIELD_CHECKOUT_TIME, LA_FIELD_CHECKOUT_TS))
+                }
+                _upsert_login_activity(token, normalized_emp_id, local_date, patch_to_send)
             except Exception as e:
                 print(f"[WARN] Duplicate check-in login-activity upsert failed for {key}: {e}")
 
             return jsonify({
                 "success": True,
+                "employee_id": normalized_emp_id,
                 "record_id": session.get("record_id"),
                 "attendance_id": session.get("attendance_id"),
                 "checkin_time": session.get("checkin_time"),
@@ -2309,6 +2380,12 @@ def checkin():
                 existing_hours = float(attendance_record.get(FIELD_DURATION) or "0")
             except Exception:
                 existing_hours = 0.0
+
+            try:
+                if attendance_record.get(FIELD_CHECKOUT):
+                    update_record(ATTENDANCE_ENTITY, record_id, {FIELD_CHECKOUT: None})
+            except Exception:
+                pass
             # If we had to generate a new attendance ID for an existing record,
             # patch it back to Dataverse (best-effort).
             if attendance_id and not attendance_record.get(FIELD_ATTENDANCE_ID_CUSTOM):
@@ -2325,13 +2402,10 @@ def checkin():
             # Calculate base_seconds from existing duration OR login activity
             # This ensures continuation sessions preserve accumulated time from previous checkout
             base_seconds = int(round(existing_hours * 3600)) if existing_hours else 0
-            
-            # Always check login activity and use the MAXIMUM value to prevent time loss
             try:
                 la_token = get_access_token()
                 la_rec = _fetch_login_activity_record(la_token, normalized_emp_id, formatted_date)
                 if la_rec:
-                    # Check both base_seconds and total_seconds, use the highest
                     la_base = int(la_rec.get(LA_FIELD_BASE_SECONDS) or 0)
                     la_total = int(la_rec.get(LA_FIELD_TOTAL_SECONDS) or 0)
                     la_max = max(la_base, la_total)
@@ -2340,7 +2414,6 @@ def checkin():
                         print(f"[INFO] Continuation base_seconds from login activity: {base_seconds}s (base={la_base}, total={la_total})")
             except Exception as la_err:
                 print(f"[WARN] Failed to fetch login activity for base_seconds: {la_err}")
-
             active_sessions[key] = {
                 "record_id": record_id,
                 "checkin_time": formatted_time,
@@ -2370,8 +2443,8 @@ def checkin():
                     LA_FIELD_CHECKIN_TS: checkin_seconds,
                     LA_FIELD_BASE_SECONDS: base_seconds,
                     LA_FIELD_CHECKIN_LOCATION: _login_activity_location_string(event),
-                    LA_FIELD_CHECKOUT_TIME: None,  # Clear checkout time
-                    LA_FIELD_CHECKOUT_TS: None,    # Clear checkout timestamp
+                    LA_FIELD_CHECKOUT_TIME: None,
+                    LA_FIELD_CHECKOUT_TS: None,
                 })
             except Exception as e:
                 print(f"[WARN] Failed to persist login activity (continuation) for {key}: {e}")
@@ -2389,6 +2462,7 @@ def checkin():
             return jsonify(
                 {
                     "success": True,
+                    "employee_id": normalized_emp_id,
                     "record_id": record_id,
                     "attendance_id": attendance_id,
                     "checkin_time": formatted_time,
@@ -2458,6 +2532,8 @@ def checkin():
                     LA_FIELD_CHECKIN_TS: checkin_seconds,
                     LA_FIELD_BASE_SECONDS: 0,
                     LA_FIELD_CHECKIN_LOCATION: _login_activity_location_string(event),
+                    LA_FIELD_CHECKOUT_TIME: None,
+                    LA_FIELD_CHECKOUT_TS: None,
                 })
             except Exception as e:
                 print(f"[WARN] Failed to persist login activity (new check-in) for {key}: {e}")
@@ -2465,6 +2541,7 @@ def checkin():
             return jsonify(
                 {
                     "success": True,
+                    "employee_id": normalized_emp_id,
                     "record_id": record_id,
                     "attendance_id": random_attendance_id,
                     "checkin_time": formatted_time,
@@ -3397,10 +3474,9 @@ def checkout():
         client_time = data.get('client_time')
         timezone_str = data.get('timezone')
 
-        # Normalize employee ID (must match what we used at check-in)
-        normalized_emp_id = employee_id_raw.upper()
-        if normalized_emp_id.isdigit():
-            normalized_emp_id = format_employee_id(int(normalized_emp_id))
+        normalized_emp_id = _resolve_employee_identifier(employee_id_raw)
+        if not normalized_emp_id:
+            return jsonify({"success": False, "error": "Employee ID is required"}), 400
         key = normalized_emp_id
 
         # Verify this employee has an active check-in (may recover below)
@@ -3476,6 +3552,15 @@ def checkout():
                             checkin_seconds = int(checkin_dt.timestamp())           # seconds for Dataverse Int32
 
                             base_seconds = int(round(existing_hours * 3600)) if existing_hours else 0
+                            try:
+                                token = get_access_token()
+                                la_rec = _fetch_login_activity_record(token, normalized_emp_id, formatted_date)
+                                if la_rec:
+                                    la_total = int(la_rec.get(LA_FIELD_TOTAL_SECONDS) or 0)
+                                    if la_total > base_seconds:
+                                        base_seconds = la_total
+                            except Exception:
+                                pass
                             active_sessions[key] = {
                                 "record_id": record_id,
                                 "checkin_time": checkin_time,
@@ -3672,6 +3757,7 @@ def checkout():
         return jsonify(
             {
                 "success": True,
+                "employee_id": normalized_emp_id,
                 "checkout_time": checkout_time_str,
                 "duration": readable_duration,
                 "total_hours": total_hours_today,
@@ -3777,9 +3863,9 @@ def get_status(employee_id):
         if not emp_raw:
             return jsonify({"checked_in": False}), 400
 
-        normalized_emp_id = emp_raw.upper()
-        if normalized_emp_id.isdigit():
-            normalized_emp_id = format_employee_id(int(normalized_emp_id))
+        normalized_emp_id = _resolve_employee_identifier(emp_raw)
+        if not normalized_emp_id:
+            return jsonify({"checked_in": False}), 400
         key = normalized_emp_id
 
         # Running totals baseline for today
@@ -3846,7 +3932,7 @@ def get_status(employee_id):
 
         # Try to recover session from Dataverse if not in memory AND not checked out
         # This handles server restarts
-        if key not in active_sessions and not checked_out_today:
+        if key not in active_sessions:
 
             try:
                 from datetime import date as _date
@@ -3907,7 +3993,7 @@ def get_status(employee_id):
                 print(f"[WARN] Failed to recover session in status: {recover_err}")
 
         # Fallback: derive active session from today's attendance record if check-in exists and checkout is missing
-        if key not in active_sessions and not checked_out_today:
+        if key not in active_sessions:
             try:
                 from datetime import date as _date
                 formatted_date = _date.today().isoformat()
@@ -3963,7 +4049,7 @@ def get_status(employee_id):
 
         # Fallback: derive active session from login activity log (survives server restarts)
         # NOTE: placed after attendance record recovery to avoid overriding real check-in with login heartbeat
-        if key not in active_sessions and not checked_out_today:
+        if key not in active_sessions:
             try:
                 from datetime import date as _date
                 formatted_date = _date.today().isoformat()
@@ -4195,6 +4281,7 @@ def get_status(employee_id):
             print(f"[WARN] Failed to persist mid-day status for {key}: {status_persist_err}")
 
         return jsonify({
+            "employee_id": normalized_emp_id,
             "checked_in": active,
             "checkin_time": checkin_time,
             "attendance_id": attendance_id,
@@ -4529,7 +4616,7 @@ def manual_edit_attendance():
             created = create_record(ATTENDANCE_ENTITY, create_payload)
             record_id = created.get(FIELD_RECORD_ID) or created.get("crc6f_table13id") or created.get("id")
 
-        final_status = "P" if duration_hours >= 9 else ("H" if duration_hours > 4 else "A")
+        final_status = "P" if duration_hours >= 9 else ("HL" if duration_hours > 4 else "A")
 
         return jsonify({
             "success": True,
@@ -4589,8 +4676,8 @@ def get_all_attendance(employee_id):
                 # Attendance classification
                 if duration_hours >= 9:
                     status = "P"
-                elif 5 <= duration_hours < 9:
-                    status = "H"
+                elif 4 <= duration_hours < 9:
+                    status = "HL"
                 else:
                     status = "A"
                 

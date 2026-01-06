@@ -19,7 +19,7 @@ let backendStateLoaded = false;
 let lastUserActionTimestamp = 0;
 
 const HALF_DAY_SECONDS = 4 * 3600;
-const FULL_DAY_SECONDS = 8 * 3600;
+const FULL_DAY_SECONDS = 9 * 3600;
 
 function resolveSocketUrl() {
     // Try environment variables first

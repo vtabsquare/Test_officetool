@@ -259,9 +259,14 @@ app.post('/emit', (req, res) => {
             const uid = String(employee_id).trim().toUpperCase();
             const room = `attendance:${uid}`;
             
-            // Clear from in-memory store
+            // Preserve last stopped state so new devices/reconnects don't reset to 0
             const attendanceModule = require('./attendance_module');
-            delete attendanceModule.activeTimers[uid];
+            attendanceModule.activeTimers[uid] = {
+              isRunning: false,
+              checkoutTime,
+              totalSeconds: typeof totalSeconds === 'number' ? totalSeconds : 0,
+              status: status || attendanceModule.deriveStatus(typeof totalSeconds === 'number' ? totalSeconds : 0),
+            };
             
             io.to(room).emit('attendance:stopped', {
               employee_id: uid,
