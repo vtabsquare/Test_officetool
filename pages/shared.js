@@ -2091,209 +2091,282 @@ export const renderMeetPage = async () => {
 
     const content = `
     <style>
-        /* --- Layout & Panels --- */
-        .meet-shell {
-            display: grid;
-            gap: 18px;
+        /* --- Modern Meet Layout --- */
+        .meet-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
-        .meet-grid {
-            display: grid;
-            grid-template-columns: 2fr 1.2fr;
-            gap: 18px;
+        .meet-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
         }
-        @media (max-width: 1080px) {
-            .meet-grid { grid-template-columns: 1fr; }
+        body.dark-theme .meet-header {
+            background: linear-gradient(135deg, #4c51bf 0%, #553c9a 100%);
         }
-        .meet-panel {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 249, 255, 0.96));
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow:
-                0 14px 40px rgba(15, 23, 42, 0.08),
-                0 1px 0 rgba(255, 255, 255, 0.8);
+        .meet-header h1 {
+            margin: 0 0 8px 0;
+            font-size: 28px;
+            font-weight: 700;
         }
-        body.dark-theme .meet-panel {
-            background: radial-gradient(circle at 10% 0%, rgba(45, 55, 72, 0.35), rgba(15, 23, 42, 0.92));
-            border: 1px solid rgba(148, 163, 184, 0.35);
-            box-shadow:
-                0 20px 60px rgba(0, 0, 0, 0.7),
-                0 1px 0 rgba(255, 255, 255, 0.05);
+        .meet-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 15px;
+        }
+        .meet-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+        body.dark-theme .meet-card {
+            background: rgba(30, 41, 59, 0.9);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
 
         /* --- Form & Inputs --- */
-        #meet-form .form-group {
-            position: static;
-            padding-left: 0;
+        .meet-form-group {
+            margin-bottom: 20px;
         }
-        #meet-form .form-group label,
-        label[for="meet-employee-search"] {
-            position: static;
-            margin-bottom: 6px;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-            color: #1f2937;
+        .meet-form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
         }
-        body.dark-theme #meet-form .form-group label,
-        body.dark-theme label[for="meet-employee-search"],
-        body.dark-theme #meet-employee-ids-group > label,
-        body.dark-theme #meet-project-id-group > label {
+        body.dark-theme .meet-form-group label {
             color: #e5e7eb;
         }
-        #meet-form .form-control,
-        #meet-employee-search,
-        #meet-employee-id-input,
-        #meet-project-id,
-        #meet-timezone {
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(148, 163, 184, 0.45);
-            border-radius: 12px;
-            padding: 10px 12px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        .meet-input,
+        .meet-select,
+        .meet-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            background: white;
         }
-        #meet-form .form-control:focus,
-        #meet-employee-search:focus,
-        #meet-employee-id-input:focus,
-        #meet-project-id:focus,
-        #meet-timezone:focus {
+        .meet-input:focus,
+        .meet-select:focus,
+        .meet-textarea:focus {
             outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        body.dark-theme #meet-form .form-control,
-        body.dark-theme #meet-employee-search,
-        body.dark-theme #meet-employee-id-input,
-        body.dark-theme #meet-project-id,
-        body.dark-theme #meet-timezone {
-            background: rgba(30, 41, 59, 0.75);
-            border-color: rgba(148, 163, 184, 0.45);
+        body.dark-theme .meet-input,
+        body.dark-theme .meet-select,
+        body.dark-theme .meet-textarea {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: rgba(148, 163, 184, 0.3);
             color: #e5e7eb;
         }
-        body.dark-theme #meet-form .form-control::placeholder,
-        body.dark-theme #meet-employee-search::placeholder,
-        body.dark-theme #meet-employee-id-input::placeholder,
-        body.dark-theme #meet-project-id::placeholder,
-        body.dark-theme #meet-timezone::placeholder {
-            color: rgba(226, 232, 240, 0.75);
+        body.dark-theme .meet-input:focus,
+        body.dark-theme .meet-select:focus,
+        body.dark-theme .meet-textarea:focus {
+            border-color: #818cf8;
+        }
+        .meet-select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+        body.dark-theme .meet-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e5e7eb' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        }
+        .meet-multiselect {
+            position: relative;
+        }
+        .meet-multiselect-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            margin-top: 4px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: none;
+        }
+        .meet-multiselect-dropdown.active {
+            display: block;
+        }
+        body.dark-theme .meet-multiselect-dropdown {
+            background: rgba(30, 41, 59, 0.98);
+            border-color: #818cf8;
+        }
+        .meet-multiselect-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .meet-multiselect-option:hover {
+            background: #f3f4f6;
+        }
+        body.dark-theme .meet-multiselect-option:hover {
+            background: rgba(55, 65, 81, 0.6);
+        }
+        .meet-multiselect-option.selected {
+            background: #ede9fe;
+        }
+        body.dark-theme .meet-multiselect-option.selected {
+            background: rgba(109, 40, 217, 0.3);
+        }
+        .meet-multiselect-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #d1d5db;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .meet-multiselect-option.selected .meet-multiselect-checkbox {
+            background: #667eea;
+            border-color: #667eea;
+        }
+        .meet-multiselect-option.selected .meet-multiselect-checkbox::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .meet-multiselect-info {
+            flex: 1;
+        }
+        .meet-multiselect-name {
+            font-weight: 600;
+            color: #111827;
+        }
+        body.dark-theme .meet-multiselect-name {
+            color: #f3f4f6;
+        }
+        .meet-multiselect-meta {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        body.dark-theme .meet-multiselect-meta {
+            color: #9ca3af;
         }
 
-        /* --- Chips & Pills --- */
-        .meet-chip-container {
+        /* --- Selected Participants Chips --- */
+        .meet-selected-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            min-height: 32px;
-            align-items: center;
+            min-height: 40px;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border: 2px dashed #e5e7eb;
+        }
+        body.dark-theme .meet-selected-chips {
+            background: rgba(17, 24, 39, 0.5);
+            border-color: rgba(148, 163, 184, 0.3);
         }
         .meet-chip {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: #eef2ff;
-            color: #1d4ed8;
-            font-size: 12px;
-            border: 1px solid rgba(129, 140, 248, 0.25);
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         }
-        body.dark-theme .meet-chip {
-            background: rgba(96, 165, 250, 0.16);
-            color: #e0e7ff;
-            border-color: rgba(96, 165, 250, 0.35);
-        }
-        .meet-chip button {
+        .meet-chip-remove {
             border: none;
-            background: transparent;
-            color: inherit;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
             cursor: pointer;
-            font-size: 12px;
-            padding: 0 2px;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 50%;
+            line-height: 1;
+            transition: background 0.15s ease;
+        }
+        .meet-chip-remove:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .meet-empty-state {
+            color: #9ca3af;
+            font-size: 13px;
+            font-style: italic;
+        }
+        body.dark-theme .meet-empty-state {
+            color: #6b7280;
         }
 
-        /* --- Lists & Cards --- */
-        .meet-project-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 14px;
-        }
-        .meet-project-card {
-            border: 1px solid rgba(148, 163, 184, 0.4);
-            border-radius: 16px;
-            padding: 14px 16px;
-            background: linear-gradient(145deg, #f8fafc, #eef2ff);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.2s ease;
-        }
-        .meet-project-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(79, 70, 229, 0.4);
-            box-shadow: 0 16px 42px rgba(15, 23, 42, 0.14);
-        }
-        body.dark-theme .meet-project-card {
-            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(17, 24, 39, 0.95));
-            border-color: rgba(148, 163, 184, 0.5);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
-        }
-        .meet-employee-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 14px;
-            margin-top: 14px;
-        }
-        .meet-employee-card {
-            border: 1px solid rgba(148, 163, 184, 0.38);
-            border-radius: 12px;
-            padding: 14px 16px;
-            background: #ffffff;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-        }
-        .meet-employee-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(79, 70, 229, 0.5);
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
-        }
-        .meet-employee-card.selected {
-            border-color: #10b981;
-            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2), 0 0 20px rgba(16, 185, 129, 0.3), 0 8px 24px rgba(16, 185, 129, 0.2);
-            transform: translateY(-2px);
-        }
-        .meet-employee-card.selected:hover {
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3), 0 0 28px rgba(16, 185, 129, 0.4), 0 12px 32px rgba(16, 185, 129, 0.25);
-        }
-        body.dark-theme .meet-employee-card {
-            border-color: rgba(148, 163, 184, 0.55);
-            background: linear-gradient(145deg, rgba(31, 41, 55, 0.92), rgba(17, 24, 39, 0.96));
-            color: #e5e7eb;
-            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7);
-        }
-        body.dark-theme .meet-employee-card.selected {
-            border-color: #22c55e;
-            background: radial-gradient(circle at 20% 20%, rgba(52, 211, 153, 0.28), transparent 45%), linear-gradient(135deg, rgba(21, 128, 61, 0.6), rgba(15, 23, 42, 0.92));
-            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35), 0 12px 28px rgba(16, 185, 129, 0.18);
-        }
-        .meet-employee-card h4 {
-            margin: 0;
+        /* --- Action Buttons --- */
+        .meet-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
             font-size: 15px;
-            font-weight: 700;
-            color: #0f172a;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .meet-employee-card p {
-            margin: 0;
-            font-size: 12px;
-            color: #4b5563;
+        .meet-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
-        body.dark-theme .meet-employee-card h4 { color: #f8fafc; }
-        body.dark-theme .meet-employee-card p { color: #e2e8f0; }
+        .meet-btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        .meet-btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .meet-btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        body.dark-theme .meet-btn-secondary {
+            background: rgba(30, 41, 59, 0.8);
+            color: #818cf8;
+            border-color: #818cf8;
+        }
+        .meet-btn-secondary:hover:not(:disabled) {
+            background: #f3f4f6;
+        }
+        body.dark-theme .meet-btn-secondary:hover:not(:disabled) {
+            background: rgba(55, 65, 81, 0.8);
+        }
+        .meet-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
 
         /* --- Call Modal --- */
         /* Globally centered overlay - no blur, transparent background */
@@ -2389,44 +2462,52 @@ export const renderMeetPage = async () => {
         body.dark-theme .meet-subtle { color: #cbd5e1; }
     </style>
 
-    <div class="card" style="margin-top:16px;">
-        <div class="card-header-flex" style="align-items:flex-start; gap:12px;">
-            <div>
-                <h3 style="margin:0; font-size:17px;">Employee directory</h3>
-                <p style="margin:4px 0 0; font-size:13px; color:#6b7280;">Tap a card to add employees to the call list.</p>
+    <div class="meet-container">
+        <div class="meet-header">
+            <h1><i class="fa-solid fa-video"></i> Start a Meeting</h1>
+            <p>Create a Google Meet and invite your team members</p>
+        </div>
+
+        <div class="meet-card">
+            <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600;">Meeting Details</h3>
+            
+            <div class="meet-form-group">
+                <label for="meet-title">Meeting Title</label>
+                <input type="text" id="meet-title" class="meet-input" placeholder="e.g., Team Standup" value="Team Sync" />
             </div>
-            <div style="margin-left:auto; display:flex; align-items:center; gap:10px; font-size:13px; color:#4b5563;">
-                <span id="meet-employee-count">0 selected</span>
-                <button type="button" id="meet-call-btn" class="btn btn-success btn-sm" disabled>
-                    <i class="fa-solid fa-phone"></i> Call Participants
+
+            <div class="meet-form-group">
+                <label for="meet-description">Description (Optional)</label>
+                <textarea id="meet-description" class="meet-textarea" rows="3" placeholder="Add meeting agenda or notes..."></textarea>
+            </div>
+
+            <div class="meet-form-group">
+                <label for="meet-employee-select">Select Participants</label>
+                <div class="meet-multiselect">
+                    <input 
+                        type="text" 
+                        id="meet-employee-select" 
+                        class="meet-input" 
+                        placeholder="Click to select employees or type to search..."
+                        autocomplete="off"
+                        readonly
+                    />
+                    <div id="meet-employee-dropdown" class="meet-multiselect-dropdown"></div>
+                </div>
+            </div>
+
+            <div class="meet-form-group">
+                <label>Selected Participants (<span id="meet-participant-count">0</span>)</label>
+                <div id="meet-selected-chips" class="meet-selected-chips">
+                    <span class="meet-empty-state">No participants selected yet</span>
+                </div>
+            </div>
+
+            <div class="meet-actions">
+                <button type="button" id="meet-call-btn" class="meet-btn meet-btn-primary" disabled>
+                    <i class="fa-solid fa-phone"></i>
+                    Start Call & Notify Participants
                 </button>
-            </div>
-        </div>
-        <div class="form-row" style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1 1 280px;">
-                <label for="meet-employee-search">Search employees</label>
-                <input id="meet-employee-search" class="form-control" placeholder="Search by name, ID, department" />
-            </div>
-            <div class="form-group" style="flex:1 1 280px;">
-                <label for="meet-employee-id-input">Add by employee ID</label>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <input id="meet-employee-id-input" class="form-control" placeholder="Type employee ID (EMP001) and click Add" />
-                    <button type="button" id="meet-add-member-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-user-plus"></i> Add</button>
-                </div>
-            </div>
-        </div>
-        <div class="form-row" style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1 1 100%;">
-                <label>Selected participants</label>
-                <div id="meet-participants" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; min-height:28px; align-items:center;">
-                    <span id="meet-participants-empty" style="font-size:12px; color:#9ca3af;">No participants added yet.</span>
-                </div>
-            </div>
-        </div>
-        <div id="meet-employee-grid" class="meet-employee-grid">
-            <div class="placeholder-text" style="grid-column:1 / -1;">
-                <i class="fa-solid fa-spinner fa-spin" style="color:#007bff; margin-bottom:0.5rem;"></i>
-                <p>Loading employees…</p>
             </div>
         </div>
     </div>
@@ -2470,21 +2551,12 @@ export const renderMeetPage = async () => {
         const API_BASE = apiBase; // Use global config instead of hardcoded localhost
         const employeesDirectory = new Map();
 
-        const form = document.getElementById('meet-form');
-        const resultEl = document.getElementById('meet-result');
-        const audienceSelect = document.getElementById('meet-audience-type');
-        const empGroup = document.getElementById('meet-employee-ids-group');
-        const projGroup = document.getElementById('meet-project-id-group');
-        const startNowCheckbox = document.getElementById('meet-start-now');
-        const startInput = document.getElementById('meet-start-time');
-        const endInput = document.getElementById('meet-end-time');
-        const participantsContainer = document.getElementById('meet-participants');
-        const participantsEmpty = document.getElementById('meet-participants-empty');
-        const empIdInput = document.getElementById('meet-employee-id-input');
-        const addMemberBtn = document.getElementById('meet-add-member-btn');
-        const projectGrid = document.getElementById('meet-project-grid');
-        const selectedProjectsWrap = document.getElementById('meet-selected-projects');
-        const selectedProjectsEmpty = document.getElementById('meet-selected-projects-empty');
+        const titleInput = document.getElementById('meet-title');
+        const descriptionInput = document.getElementById('meet-description');
+        const employeeSelectInput = document.getElementById('meet-employee-select');
+        const employeeDropdown = document.getElementById('meet-employee-dropdown');
+        const selectedChipsContainer = document.getElementById('meet-selected-chips');
+        const participantCountEl = document.getElementById('meet-participant-count');
         const callBtn = document.getElementById('meet-call-btn');
         const callModal = document.getElementById('meet-call-modal');
         const callList = document.getElementById('meet-call-list');
@@ -2493,13 +2565,6 @@ export const renderMeetPage = async () => {
         const callBanner = document.getElementById('meet-call-banner');
         const callBannerTitle = document.getElementById('meet-call-banner-title');
         const callBannerText = document.getElementById('meet-call-banner-text');
-        const employeeGrid = document.getElementById('meet-employee-grid');
-        const employeeSearchInput = document.getElementById('meet-employee-search');
-        const employeeCountEl = document.getElementById('meet-employee-count');
-        const titleInput = document.getElementById('meet-title');
-        const descriptionInput = document.getElementById('meet-description');
-        const projectIdInput = document.getElementById('meet-project-id');
-        const timezoneInput = document.getElementById('meet-timezone');
 
         try {
             const body = document.body;
@@ -2510,19 +2575,16 @@ export const renderMeetPage = async () => {
         }
 
         const participantDirectory = new Map();
-        const selectedProjects = new Map();
-        let projectsCache = [];
+        const selectedEmployees = new Set();
+        let allEmployees = [];
+        let filteredEmployees = [];
         let currentMeetInfo = null;
         let currentCallId = null;
         let callDecisions = new Map();
         let serverParticipantStatuses = new Map();
-        let employeeCards = [];
-        let filteredEmployeeCards = [];
-        const createMeetBtn = form?.querySelector('button[type="submit"]');
-        const defaultCreateBtnHTML = createMeetBtn?.innerHTML || '<i class="fa-solid fa-video"></i> Create Meet';
-        const defaultCallBtnHTML = callBtn?.innerHTML || '<i class="fa-solid fa-phone"></i> Call Participants';
+        const defaultCallBtnHTML = callBtn?.innerHTML || '<i class="fa-solid fa-phone"></i> Start Call & Notify Participants';
         let isMeetRequestInFlight = false;
-        let ringToneController = null;
+        let isDropdownOpen = false;
 
         const normalizeEmployeeId = (value) => String(value || '').trim().toUpperCase();
         const makeManualSource = (id) => `manual:${id}`;
