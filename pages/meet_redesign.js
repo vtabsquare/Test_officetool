@@ -331,6 +331,14 @@ export const renderMeetPage = async () => {
         app.innerHTML = getPageContentHTML('Meet', content);
     }
 
+    // Clean up any existing modals from previous page loads
+    const existingModals = document.querySelectorAll('#meet-call-modal');
+    existingModals.forEach(modal => {
+        if (modal.parentElement === document.body) {
+            modal.remove();
+        }
+    });
+
     setTimeout(async () => {
         const API_BASE = apiBase;
         const employeesDirectory = new Map();
