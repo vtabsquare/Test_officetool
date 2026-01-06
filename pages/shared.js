@@ -2823,13 +2823,8 @@ const fetchProjectContributors = async (projectId) => {
     }
     return data.contributors || data.items || [];
 };
-            if (!resp.ok || data.success === false || data.ok === false) {
-                throw new Error(data.error || 'Failed to load project contributors');
-            }
-            return data.contributors || data.items || [];
-        };
 
-        const handleAddProject = async (projectId, triggerBtn) => {
+const handleAddProject = async (projectId, triggerBtn) => {
             const normalizedId = String(projectId || '').trim().toUpperCase();
             if (!normalizedId) {
                 showToast('Invalid project ID', 'warning');
