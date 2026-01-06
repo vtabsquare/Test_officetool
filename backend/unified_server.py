@@ -724,6 +724,26 @@ active_sessions = {}
 # Store login events (check-in/out with location) - in production, persist to DB
 login_events = []
 
+# ================== ATTENDANCE CONFIGURATION ==================
+ATTENDANCE_ENTITY = "crc6f_table13s"
+HALF_DAY_HOURS = 4.0
+FULL_DAY_HOURS = 9.0
+HALF_DAY_SECONDS = int(HALF_DAY_HOURS * 3600)
+FULL_DAY_SECONDS = int(FULL_DAY_HOURS * 3600)
+FIELD_EMPLOYEE_ID = "crc6f_employeeid"
+FIELD_DATE = "crc6f_date"
+FIELD_CHECKIN = "crc6f_checkin"
+FIELD_CHECKOUT = "crc6f_checkout"
+FIELD_DURATION = "crc6f_duration"
+FIELD_DURATION_INTEXT = "crc6f_duration_intext"
+FIELD_ATTENDANCE_ID_CUSTOM = "crc6f_attendanceid"
+FIELD_RECORD_ID = "crc6f_table13id"
+FIELD_STATUS = "crc6f_status"
+
+# ================== LEAVE TRACKER CONFIGURATION ==================
+LEAVE_ENTITY = "crc6f_table14s"
+
+# ================== LOGIN ACTIVITY CONFIGURATION ==================
 LOGIN_ACTIVITY_ENTITY = "crc6f_hr_loginactivitytbs"
 LOGIN_ACTIVITY_PRIMARY_FIELD = "crc6f_hr_loginactivitytbid"
 LA_FIELD_EMPLOYEE_ID = "crc6f_employeeid"
