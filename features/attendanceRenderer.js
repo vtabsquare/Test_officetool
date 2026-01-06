@@ -481,7 +481,16 @@ export async function handleAttendanceChanged(data) {
 // ================== EXPORTS FOR BACKWARD COMPATIBILITY ==================
 
 // These functions maintain API compatibility with the old timer.js
-export const loadTimerState = initializeAttendance;
+// loadTimerState gets employee ID from state automatically
+export async function loadTimerState(employeeId = null) {
+    const empId = employeeId || state.user?.id;
+    console.log('[ATTENDANCE-RENDERER] loadTimerState called with:', empId);
+    if (!empId) {
+        console.warn('[ATTENDANCE-RENDERER] loadTimerState: No employee ID available');
+        return;
+    }
+    return initializeAttendance(empId);
+}
 // updateTimerButton is already exported above
 
 // Get current state for other components
