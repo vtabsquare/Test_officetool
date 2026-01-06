@@ -78,9 +78,18 @@ export async function listAllEmployees(forceRefresh = false) {
   }
 
   const res = await timedFetch(`${BASE_URL}/api/employees/all`, {}, 'listAllEmployees');
-  const data = await res.json();
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (e) {
+    // Backend sometimes returns HTML error pages (500) - surface a readable error.
+    let text = '';
+    try { text = await res.text(); } catch { }
+    const snippet = String(text || '').slice(0, 180);
+    throw new Error(`Employee directory returned non-JSON (HTTP ${res.status}). ${snippet}`);
+  }
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Failed to fetch employee directory');
+    throw new Error(data.error || `Failed to fetch employee directory (HTTP ${res.status})`);
   }
 
   const employees = (data.employees || []).map(e => ({

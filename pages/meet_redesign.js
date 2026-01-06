@@ -3,7 +3,7 @@ import { state } from '../state.js';
 import { getPageContentHTML } from '../utils.js';
 import { showToast } from '../components/toast.js';
 import { apiBase } from '../config.js';
-import { listAllEmployees } from '../features/employeeApi.js';
+import { listAllEmployees, listEmployees } from '../features/employeeApi.js';
 
 export const renderMeetPage = async () => {
     const tz = (() => {
@@ -372,16 +372,29 @@ export const renderMeetPage = async () => {
                     setTimeout(() => reject(new Error('Employee fetch timeout (12s)')), 12000)
                 );
 
-                // Use the same employee API the rest of the app uses (has proper base URL + timed logging)
-                const rawEmployees = await Promise.race([
-                    listAllEmployees(false),
-                    timeoutPromise
-                ]);
+                let finalEmployees = null;
 
-                // If we got an empty list (can happen if a bad cache was warmed), force refresh once.
-                const finalEmployees = Array.isArray(rawEmployees) && rawEmployees.length === 0
-                    ? await Promise.race([listAllEmployees(true), timeoutPromise])
-                    : rawEmployees;
+                // Primary: employee directory endpoint
+                try {
+                    const rawEmployees = await Promise.race([
+                        listAllEmployees(false),
+                        timeoutPromise
+                    ]);
+
+                    // If we got an empty list (can happen if a bad cache was warmed), force refresh once.
+                    finalEmployees = Array.isArray(rawEmployees) && rawEmployees.length === 0
+                        ? await Promise.race([listAllEmployees(true), timeoutPromise])
+                        : rawEmployees;
+                } catch (primaryErr) {
+                    console.warn('[MEET] listAllEmployees failed, falling back to paginated /api/employees:', primaryErr);
+
+                    // Fallback: paginated endpoint (used widely across app)
+                    const paged = await Promise.race([
+                        listEmployees(1, 5000),
+                        timeoutPromise
+                    ]);
+                    finalEmployees = (paged && Array.isArray(paged.items)) ? paged.items : [];
+                }
 
                 allEmployees = (finalEmployees || []).map(emp => ({
                     id: String(emp.employee_id || '').trim().toUpperCase(),
