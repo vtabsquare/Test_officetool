@@ -556,6 +556,33 @@ def _apply_asset_rpt(payload: dict) -> dict:
             payload[rpt_key] = payload[base_key]
     return payload
 
+# ================== TIMESHEET/TIME TRACKER CONFIGURATION ==================
+TIMESHEET_ENTITY = os.getenv("TIMESHEET_ENTITY", "crc6f_hr_timesheets")
+TIMESHEET_ENTITY_CANDIDATES = [
+    "crc6f_hr_timesheets",
+    "crc6f_hr_timesheet",
+    "crc6f_timesheets",
+    "crc6f_timesheet"
+]
+TIMESHEET_ENTITY_RESOLVED = None
+
+# RPT mirror map for timesheet
+TIMESHEET_RPT_MAP = {
+    "createdon": "crc6f_RPT_createdon",
+    "modifiedon": "crc6f_RPT_modifiedon",
+    "statecode": "crc6f_RPT_statecode",
+    "statuscode": "crc6f_RPT_statuscode",
+}
+
+def _apply_timesheet_rpt(payload: dict) -> dict:
+    """Apply timesheet RPT mirroring to payload."""
+    if not isinstance(payload, dict):
+        return {}
+    for base_key, rpt_key in TIMESHEET_RPT_MAP.items():
+        if base_key in payload and payload[base_key] not in (None, "", []):
+            payload[rpt_key] = payload[base_key]
+    return payload
+
 # ================== INTERN MANAGEMENT CONFIGURATION ==================
 INTERN_ENTITY = "crc6f_hr_interndetailses"
 # RPT mirror map for intern details
@@ -13015,6 +13042,14 @@ def get_login_events():
 
 
 # ================== MAIN ==================
+# Register timesheet routes
+try:
+    from timesheet_routes import register_timesheet_routes
+    register_timesheet_routes(app, get_access_token, RESOURCE, TIMESHEET_ENTITY, _apply_timesheet_rpt, create_record)
+    print("[OK] Timesheet routes registered")
+except Exception as e:
+    print(f"[WARN] Failed to register timesheet routes: {e}")
+
 if __name__ == '__main__':
     print("\n" + "=" * 80)
     print("UNIFIED BACKEND SERVER STARTING")
@@ -13035,6 +13070,7 @@ if __name__ == '__main__':
     print("  [OK] Employee Onboarding (5-Stage Process)")
     print("  [OK] Holiday Management (CRUD Operations)")
     print("  [OK] Deleted Employees Management (CSV)")
+    print("  [OK] Time Tracker (Task Time Logging)")
     print("=" * 80)
     print("\nEndpoints:")
     base = f"http://localhost:{port}"
@@ -13047,6 +13083,8 @@ if __name__ == '__main__':
     print(f"  -> {base}/api/employees - Employee management")
     print(f"  -> {base}/api/onboarding - Employee onboarding")
     print(f"  -> {base}/api/holidays - Holiday management")
+    print(f"  -> {base}/api/time-tracker/task-log - Save task time")
+    print(f"  -> {base}/api/time-tracker/logs - Get timesheet logs")
     print("=" * 80 + "\n")
     
     app.run(debug=debug_flag, host='0.0.0.0', port=port)
