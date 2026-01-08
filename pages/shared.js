@@ -487,6 +487,7 @@ export const renderMyTasksPage = async () => {
     const setPersistedSecs = (guid, secs) => { try { localStorage.setItem(PER_TASK_KEY(empId, guid, todayStr()), String(Math.max(0, secs | 0))); } catch { } };
 
     const postTimesheetLog = async ({ seconds, task, started_at = null, ended_at = null }) => {
+        console.log('[MY_TASKS] postTimesheetLog called with:', { seconds, task, started_at, ended_at });
         const body = {
             employee_id: empId,
             project_id: task.project_id,
@@ -500,16 +501,20 @@ export const renderMyTasksPage = async () => {
             session_end_ms: ended_at || Date.now(),
             tz_offset_minutes: new Date().getTimezoneOffset()
         };
+        console.log('[MY_TASKS] Posting to:', `${API}/time-tracker/task-log`);
+        console.log('[MY_TASKS] Request body:', body);
         try {
             const res = await fetch(`${API}/time-tracker/task-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            console.log('[MY_TASKS] Response status:', res.status);
             const result = await res.json().catch(() => ({ success: false }));
+            console.log('[MY_TASKS] Response data:', result);
             if (res.ok && result.success) {
                 try { sessionStorage.setItem('tt_last_log', JSON.stringify(body)); } catch { }
                 if (window.location.hash === '#/time-my-timesheet') { try { await renderMyTimesheetPage(); } catch { } }
                 return true;
             }
-            console.error('Timesheet upsert failed:', result.error || res.status);
-        } catch (err) { console.error('Timesheet upsert network error:', err); }
+            console.error('[MY_TASKS] Timesheet upsert failed:', result.error || res.status);
+        } catch (err) { console.error('[MY_TASKS] Timesheet upsert network error:', err); }
         return false;
     };
 
