@@ -258,9 +258,11 @@ const renderAttendanceTrackerPage = async (mode) => {
 
         for (let i = 1; i <= daysInMonth; i++) {
             const dayData = myAttendance[i];
+            console.log(`Day ${i}: dayData =`, dayData, 'Type:', typeof dayData);
             const isSelected = i === state.selectedAttendanceDay;
             const isHoliday = isHolidayDate(year, month, i);
             const statusHTML = getStatusCellHTML(dayData, isHoliday);
+            console.log(`Day ${i}: statusHTML =`, statusHTML);
 
             calendarCells.push(`
                 <div class="calendar-day ${isSelected ? 'selected' : ''}" data-day="${i}">
@@ -950,7 +952,13 @@ async function loadHolidaysForMonth(month, year) {
 export const renderMyAttendancePage = async () => {
     const date = state.currentAttendanceDate;
     const year = date.getFullYear();
-    const month = date.getMonth() + 1;
+    const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+    
+    console.log('🗓️ renderMyAttendancePage called with:');
+    console.log('  Date:', date.toDateString());
+    console.log('  Year:', year);
+    console.log('  Month (JS):', date.getMonth());
+    console.log('  Month (1-based):', month);
 
     // Lightweight skeleton while holidays and monthly attendance are loading
     try {
@@ -981,7 +989,10 @@ export const renderMyAttendancePage = async () => {
         console.log(`📅 Loaded ${currentMonthHolidays.length} holidays for ${year}-${month}`);
 
         const uid = String(state.user.id || '').toUpperCase();
+        console.log('🔍 Fetching attendance for:', uid, 'Year:', year, 'Month:', month);
         const records = await fetchMonthlyAttendance(uid, year, month);
+        console.log('📊 Received records:', records.length, records);
+        
         const attendanceMap = {};
         records.forEach(rec => {
             if (rec.day) {
@@ -1002,6 +1013,7 @@ export const renderMyAttendancePage = async () => {
         });
         attendanceMap.employeeName = state.user?.name || state.user?.full_name || state.user?.id || '';
         state.attendanceData[state.user.id] = attendanceMap;
+        console.log('💾 Stored attendance data:', attendanceMap);
     } catch (err) {
         console.error('Failed to fetch attendance:', err);
     }
@@ -1197,6 +1209,9 @@ async function handleSubmitAttendance() {
 }
 
 export const handleAttendanceNav = async (direction) => {
+    console.log('🔄 handleAttendanceNav called with direction:', direction);
+    console.log('  Current date before change:', state.currentAttendanceDate.toDateString());
+    
     // Normalize to avoid DST/overflow issues, then move exactly one month.
     const nextDate = new Date(state.currentAttendanceDate);
     nextDate.setDate(1);
@@ -1206,12 +1221,26 @@ export const handleAttendanceNav = async (direction) => {
         nextDate.setMonth(nextDate.getMonth() - 1);
     }
     state.currentAttendanceDate = nextDate;
+    
+    console.log('  New date after change:', state.currentAttendanceDate.toDateString());
+
+    // Clear the attendance data cache to force fresh fetch
+    if (state.cache && state.cache.attendance) {
+        const uid = String(state.user.id || '').toUpperCase();
+        const year = state.currentAttendanceDate.getFullYear();
+        const month = state.currentAttendanceDate.getMonth() + 1;
+        const cacheKey = `${uid}|${year}|${month}`;
+        delete state.cache.attendance[cacheKey];
+        console.log('🗑️ Cleared cache for key:', cacheKey);
+    }
 
     // Re-render the active attendance view with fresh data for the new month.
     const isTeamView = window.location.hash.includes('attendance-team');
     if (isTeamView) {
+        console.log('📊 Rendering team attendance for new month');
         await renderTeamAttendancePage();
     } else {
+        console.log('📊 Rendering my attendance for new month');
         await renderMyAttendancePage();
     }
 };
