@@ -6355,10 +6355,16 @@ body.dark-theme .task-link {
   align-items: center;
   justify-content: center;
   background: var(--surface-alt);
+  position: relative;
+  z-index: 1;
 }
 
 .month-nav-btn:hover {
-  background: var(--surface-color);
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
 
 .attendance-card {
