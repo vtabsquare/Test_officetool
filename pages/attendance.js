@@ -38,7 +38,7 @@ const renderAttendanceTrackerPage = async (mode) => {
             // If it's a holiday but no attendance data, show INL
             if (isHoliday) {
                 return `
-                    <div class="status-cell status-inl">INL</div>
+                    <div class="status-cell status-inl" style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; text-align: center; min-width: 20px; background: #6c757d; color: white;">INL</div>
                 `;
             }
             return '';
@@ -101,7 +101,7 @@ const renderAttendanceTrackerPage = async (mode) => {
             : '';
 
         return `
-            <div class="status-cell status-${normalizedStatus.toLowerCase()}">
+            <div class="status-cell status-${normalizedStatus.toLowerCase()}" style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; text-align: center; min-width: 20px;">
                 ${content}
                 ${isLate ? '<i class="fa-solid fa-clock-rotate-left late-icon" title="Late entry"></i>' : ''}
                 ${isManual ? '<i class="fa-solid fa-hand manual-icon" title="Manual entry"></i>' : ''}
@@ -261,6 +261,15 @@ const renderAttendanceTrackerPage = async (mode) => {
             const isSelected = i === state.selectedAttendanceDay;
             const isHoliday = isHolidayDate(year, month, i);
             const statusHTML = getStatusCellHTML(dayData, isHoliday);
+            
+            // Debug: Check first few days and days with data
+            if (i <= 5 || dayData) {
+                console.log(`📅 Day ${i}:`, {
+                    hasData: !!dayData,
+                    isHoliday,
+                    statusHTML: statusHTML ? statusHTML.substring(0, 50) + '...' : 'empty'
+                });
+            }
 
             calendarCells.push(`
                 <div class="calendar-day ${isSelected ? 'selected' : ''}" data-day="${i}">
@@ -988,6 +997,7 @@ export const renderMyAttendancePage = async () => {
         console.log('  Records received:', records.length);
         console.log('  Mapped days:', Object.keys(attendanceMap).filter(k => k !== 'employeeName'));
         console.log('  Sample mapped data:', Object.entries(attendanceMap).slice(0, 3));
+        console.log('  Day numbers in data:', Object.keys(attendanceMap).filter(k => k !== 'employeeName').map(Number));
     } catch (err) {
         console.error('Failed to fetch attendance:', err);
     }
