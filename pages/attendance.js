@@ -304,14 +304,32 @@ const renderAttendanceTrackerPage = async (mode) => {
             startOfWeek.setDate(today.getDate() - today.getDay());
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 6);
+            
+            console.log('🗓️ Week filter debug:');
+            console.log('  Today:', today.toDateString());
+            console.log('  Start of week:', startOfWeek.toDateString());
+            console.log('  End of week:', endOfWeek.toDateString());
+            console.log('  Displayed month/year:', month, year);
 
-            filteredAttendanceData = Object.values(myAttendance)
-                .filter(d => d && (d.checkIn && d.checkOut || d.leaveType))
-                .filter(d => {
+            const allAttendanceData = Object.values(myAttendance)
+                .filter(d => d && (d.checkIn && d.checkOut || d.leaveType));
+            
+            console.log('  All attendance entries:', allAttendanceData.map(d => ({
+                day: d.day,
+                checkIn: d.checkIn,
+                checkOut: d.checkOut,
+                date: new Date(year, month, d.day).toDateString()
+            })));
+
+            filteredAttendanceData = allAttendanceData.filter(d => {
                     const dayDate = new Date(year, month, d.day);
-                    return dayDate >= startOfWeek && dayDate <= endOfWeek;
+                    const inRange = dayDate >= startOfWeek && dayDate <= endOfWeek;
+                    console.log(`    Day ${d.day} (${dayDate.toDateString()}) in range:`, inRange);
+                    return inRange;
                 })
                 .sort((a, b) => (b.day || 0) - (a.day || 0));
+                
+            console.log('  Filtered result count:', filteredAttendanceData.length);
         } else if (currentFilter === 'month') {
             // Get current month data
             filteredAttendanceData = Object.values(myAttendance)
