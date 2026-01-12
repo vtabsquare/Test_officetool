@@ -5,6 +5,7 @@ import { renderModal, closeModal } from '../components/modal.js';
 import { API_BASE_URL } from '../config.js';
 import { clearCacheByPrefix } from '../features/cache.js';
 import { isAdminUser, isManagerOrAdmin } from '../utils/accessControl.js';
+import { fetchLoginEvents } from '../features/loginSettingsApi.js';
 
 const isManagerUserAttendance = () => {
     try {
@@ -27,7 +28,7 @@ const isHolidayDate = (year, month, day) => {
     });
 };
 
-const renderAttendanceTrackerPage = (mode) => {
+const renderAttendanceTrackerPage = async (mode) => {
     const date = state.currentAttendanceDate;
     const monthName = date.toLocaleString('default', { month: 'long' });
     const year = date.getFullYear();
@@ -237,7 +238,7 @@ const renderAttendanceTrackerPage = (mode) => {
         `;
     };
 
-    const getMyViewHTML = () => {
+    const getMyViewHTML = async () => {
         const myAttendance = state.attendanceData[state.user.id] || {};
         const month = date.getMonth();
         const firstDayIndex = new Date(year, month, 1).getDay(); // Sunday = 0
@@ -268,6 +269,27 @@ const renderAttendanceTrackerPage = (mode) => {
         const todayDate = new Date();
         const isCurrentMonth = year === todayDate.getFullYear() && month === todayDate.getMonth();
         const todayDay = isCurrentMonth ? todayDate.getDate() : null;
+
+        // Fetch today's login activity for accurate check-in time
+        let todayLoginActivity = null;
+        if (isCurrentMonth && todayDay) {
+            try {
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0];
+                const loginData = await fetchLoginEvents({
+                    employee_id: String(state.user.id || '').toUpperCase(),
+                    from: todayStr,
+                    to: todayStr
+                });
+                
+                if (loginData.success && loginData.daily_summary && loginData.daily_summary.length > 0) {
+                    todayLoginActivity = loginData.daily_summary[0];
+                    console.log('📋 Fetched today login activity:', todayLoginActivity);
+                }
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch login activity:', err);
+            }
+        }
 
         const todayLogData = todayDay && myAttendance[todayDay] ? [myAttendance[todayDay]] : [];
 
@@ -323,9 +345,31 @@ const renderAttendanceTrackerPage = (mode) => {
         const recentLogDays = todayLogData;
 
         const firstLastOutRows = recentLogDays.map(d => {
+            // Use login activity data for today if available
+            let checkInTime = d.checkIn;
+            let checkOutTime = d.checkOut;
+            
+            if (isCurrentMonth && d.day === todayDay && todayLoginActivity) {
+                // Extract time from login activity check-in time
+                if (todayLoginActivity.check_in_time) {
+                    const checkInDate = new Date(todayLoginActivity.check_in_time);
+                    if (!isNaN(checkInDate.getTime())) {
+                        checkInTime = checkInDate.toTimeString().split(' ')[0].substring(0, 8);
+                    }
+                }
+                
+                // Extract time from login activity check-out time
+                if (todayLoginActivity.check_out_time) {
+                    const checkOutDate = new Date(todayLoginActivity.check_out_time);
+                    if (!isNaN(checkOutDate.getTime())) {
+                        checkOutTime = checkOutDate.toTimeString().split(' ')[0].substring(0, 8);
+                    }
+                }
+            }
+            
             const dayStr = String(d.day || 1).padStart(2, '0');
-            const start = new Date(`${yearMonth}-${dayStr}T${d.checkIn}`);
-            const end = new Date(`${yearMonth}-${dayStr}T${d.checkOut}`);
+            const start = new Date(`${yearMonth}-${dayStr}T${checkInTime}`);
+            const end = new Date(`${yearMonth}-${dayStr}T${checkOutTime}`);
             const totalMs = end.getTime() - start.getTime();
             const totalHours = isNaN(totalMs) ? '00' : String(Math.floor(totalMs / 3600000)).padStart(2, '0');
             const totalMins = isNaN(totalMs) ? '00' : String(Math.floor((totalMs % 3600000) / 60000)).padStart(2, '0');
@@ -333,8 +377,8 @@ const renderAttendanceTrackerPage = (mode) => {
             return `
             <tr>
                 <td>${d.day} ${date.toLocaleString('default', { month: 'short' })} ${year}</td>
-                <td>${d.checkIn}</td>
-                <td>${d.checkOut}</td>
+                <td>${checkInTime || '--:--:--'}</td>
+                <td>${checkOutTime || '--:--:--'}</td>
                 <td>${totalHours}h ${totalMins}m</td>
             </tr>`
         }).join('') || `<tr><td colspan="4" class="placeholder-text">No recent check-in data</td></tr>`;
@@ -420,11 +464,13 @@ const renderAttendanceTrackerPage = (mode) => {
             `}
         </div>
     `;
-
+    
+    const myViewHTML = mode === 'my' ? await getMyViewHTML() : getTeamViewHTML();
+    
     const content = `
         ${headerHTML}
         <div class="card attendance-card">
-            ${mode === 'my' ? getMyViewHTML() : getTeamViewHTML()}
+            ${myViewHTML}
         </div>
     `;
 
@@ -434,9 +480,9 @@ const renderAttendanceTrackerPage = (mode) => {
     const timeFilter = document.getElementById('time-filter');
     if (timeFilter) {
         timeFilter.value = state.attendanceFilter || 'week';
-        timeFilter.addEventListener('change', (e) => {
+        timeFilter.addEventListener('change', async (e) => {
             state.attendanceFilter = e.target.value;
-            renderAttendanceTrackerPage(mode);
+            await renderAttendanceTrackerPage(mode);
         });
     }
 
@@ -878,7 +924,7 @@ export const renderMyAttendancePage = async () => {
         console.error('Failed to fetch attendance:', err);
     }
 
-    renderAttendanceTrackerPage('my');
+    await renderAttendanceTrackerPage('my');
 };
 
 export const renderTeamAttendancePage = async () => {
@@ -996,7 +1042,7 @@ export const renderTeamAttendancePage = async () => {
         state.attendanceData = {};
     }
 
-    renderAttendanceTrackerPage('team');
+    await renderAttendanceTrackerPage('team');
 };
 
 // Check if attendance has been submitted for the current month
