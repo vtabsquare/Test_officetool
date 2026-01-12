@@ -22,6 +22,24 @@ from dataverse_helper import create_record, update_record, get_access_token
 # Blueprint for v2 attendance routes
 attendance_v2_bp = Blueprint('attendance_v2', __name__, url_prefix='/api/v2/attendance')
 
+@attendance_v2_bp.after_request
+def add_cors_headers(response):
+    """Add CORS headers to all responses from this blueprint"""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@attendance_v2_bp.route('/<path:path>', methods=['OPTIONS'])
+@attendance_v2_bp.route('/', methods=['OPTIONS'])
+def handle_options(path=None):
+    """Handle preflight OPTIONS requests"""
+    response = jsonify({'status': 'ok'})
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
 # ================== CONFIGURATION ==================
 HALF_DAY_SECONDS = 4 * 3600      # 4 hours = Half Day (HL)
 FULL_DAY_SECONDS = 9 * 3600      # 9 hours = Present (P)
