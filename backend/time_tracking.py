@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import os, json
 from dataverse_helper import get_access_token
 import requests
+import urllib.parse
 
 bp_time = Blueprint("time_tracking", __name__, url_prefix="/api")
 
@@ -10,6 +11,73 @@ bp_time = Blueprint("time_tracking", __name__, url_prefix="/api")
 RESOURCE = os.getenv("RESOURCE")
 DV_API = os.getenv("DATAVERSE_API", "/api/data/v9.2")
 ENTITY_SET_TASKS = "crc6f_hr_taskdetailses"
+
+# Dataverse entity set for project headers
+ENTITY_SET_PROJECTS = "crc6f_hr_projectheaders"
+
+
+def _dv_formatted(rec: dict, field: str):
+    try:
+        return rec.get(f"{field}@OData.Community.Display.V1.FormattedValue")
+    except Exception:
+        return None
+
+
+def _normalize_status(val: str) -> str:
+    s = (val or "").strip()
+    if not s:
+        return s
+    low = s.lower()
+    if low in ("canceled", "cancelled"):
+        return "Cancelled"
+    if low == "inactive":
+        return "Inactive"
+    return s
+
+
+def _fetch_projects_index(project_ids, headers):
+    """Return (existing_ids_set, status_by_id, inactive_ids_set)."""
+    pids = [str(x).strip() for x in (project_ids or []) if str(x).strip()]
+    if not pids:
+        return set(), {}, set()
+
+    # Dataverse has URL/query length limits; chunk the filter.
+    existing = set()
+    status_by_id = {}
+    inactive = set()
+
+    chunk_size = 25
+    for i in range(0, len(pids), chunk_size):
+        chunk = pids[i : i + chunk_size]
+        # Build OR filter: (crc6f_projectid eq 'P1' or crc6f_projectid eq 'P2' ...)
+        ors = []
+        for pid in chunk:
+            safe = pid.replace("'", "''")
+            ors.append(f"crc6f_projectid eq '{safe}'")
+        filter_expr = " or ".join(ors)
+        filter_q = urllib.parse.quote(filter_expr, safe="()'= $")
+        select = "crc6f_projectid,crc6f_projectstatus,statecode,statuscode"
+        url = f"{RESOURCE}{DV_API}/{ENTITY_SET_PROJECTS}?$select={select}&$filter={filter_q}"
+        resp = requests.get(url, headers=headers, timeout=30)
+        if not resp.ok:
+            # If project lookup fails, do not hide tasks (safer). Caller will treat as unknown.
+            continue
+        vals = resp.json().get("value", [])
+        for p in vals:
+            pid = (p.get("crc6f_projectid") or "").strip()
+            if not pid:
+                continue
+            existing.add(pid)
+            # Prefer formatted labels if present
+            proj_status = _dv_formatted(p, "crc6f_projectstatus") or p.get("crc6f_projectstatus")
+            if proj_status is not None:
+                status_by_id[pid] = _normalize_status(str(proj_status))
+            try:
+                if int(p.get("statecode") or 0) != 0:
+                    inactive.add(pid)
+            except Exception:
+                pass
+    return existing, status_by_id, inactive
 
 TIMESHEET_RPT_MAP = {
     "createdon": "crc6f_RPT_createdon",
@@ -158,8 +226,9 @@ def proxy_tasks():
             "Accept": "application/json",
             "OData-Version": "4.0",
             "Content-Type": "application/json",
+            "Prefer": 'odata.include-annotations="*"',
         }
-        url = f"{RESOURCE}{DV_API}/{ENTITY_SET_TASKS}?$select=crc6f_hr_taskdetailsid,crc6f_taskid,crc6f_taskname,crc6f_taskdescription,crc6f_taskpriority,crc6f_taskstatus,crc6f_assignedto,crc6f_assigneddate,crc6f_duedate,crc6f_projectid,crc6f_boardid"
+        url = f"{RESOURCE}{DV_API}/{ENTITY_SET_TASKS}?$select=crc6f_hr_taskdetailsid,crc6f_taskid,crc6f_taskname,crc6f_taskdescription,crc6f_taskpriority,crc6f_taskstatus,crc6f_assignedto,crc6f_assigneddate,crc6f_duedate,crc6f_projectid,crc6f_boardid,statecode,statuscode"
         resp = requests.get(url, headers=headers, timeout=30)
         if not resp.ok:
             return jsonify({"success": False, "error": resp.text}), resp.status_code
@@ -167,18 +236,23 @@ def proxy_tasks():
 
         items = []
         for t in values:
+            guid = t.get("crc6f_hr_taskdetailsid")
+            if not guid:
+                continue
             rec = {
-                "guid": t.get("crc6f_hr_taskdetailsid"),
+                "guid": guid,
                 "task_id": t.get("crc6f_taskid"),
                 "task_name": t.get("crc6f_taskname"),
                 "task_description": t.get("crc6f_taskdescription"),
                 "task_priority": t.get("crc6f_taskpriority"),
-                "task_status": t.get("crc6f_taskstatus"),
+                "task_status": _normalize_status(str(_dv_formatted(t, "crc6f_taskstatus") or t.get("crc6f_taskstatus") or "")),
                 "assigned_to": t.get("crc6f_assignedto"),
                 "assigned_date": t.get("crc6f_assigneddate"),
                 "due_date": t.get("crc6f_duedate"),
                 "project_id": t.get("crc6f_projectid"),
                 "board_id": t.get("crc6f_boardid"),
+                "_task_statecode": t.get("statecode"),
+                "_task_statuscode": t.get("statuscode"),
             }
             if assigned_to:
                 ass = (rec.get("assigned_to") or "").lower()
@@ -382,6 +456,39 @@ def list_my_tasks():
                 or (uemail_lc and uemail_lc in ass)
             ):
                 out.append(rec)
+
+        # Resolve project availability/status. If a project record is missing (deleted),
+        # remove its tasks from My Tasks.
+        project_ids = list({str(r.get("project_id") or "").strip() for r in out if str(r.get("project_id") or "").strip()})
+        existing_projects, project_status_by_id, inactive_projects = _fetch_projects_index(project_ids, headers)
+
+        filtered = []
+        for rec in out:
+            pid = str(rec.get("project_id") or "").strip()
+            if pid:
+                # If we were able to fetch projects and this pid isn't present, treat as deleted.
+                if existing_projects and pid not in existing_projects:
+                    continue
+
+                proj_status = project_status_by_id.get(pid)
+                if proj_status:
+                    # If project is inactive/cancelled, show the exact projectstatus value.
+                    if pid in inactive_projects or proj_status.lower() in ("cancelled", "canceled", "inactive"):
+                        rec["task_status"] = proj_status
+
+            # If task record is inactive, reflect it in task_status (but do not remove).
+            try:
+                if int(rec.get("_task_statecode") or 0) != 0:
+                    rec["task_status"] = _normalize_status(rec.get("task_status") or "Inactive") or "Inactive"
+            except Exception:
+                pass
+
+            # Remove internal fields
+            rec.pop("_task_statecode", None)
+            rec.pop("_task_statuscode", None)
+            filtered.append(rec)
+
+        out = filtered
 
         # Attach time totals for the requesting user
         entries = _read_entries()

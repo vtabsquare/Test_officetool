@@ -220,6 +220,7 @@ from flask import Blueprint, request, jsonify, current_app
 import requests, os, re, traceback
 from dotenv import load_dotenv
 from dataverse_helper import get_access_token
+import urllib.parse
 
 bp = Blueprint("project_boards",  __name__, url_prefix="/api")
 
@@ -437,13 +438,68 @@ def delete_board(guid):
         token = get_access_token()
         hdr = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
+        # 1) Fetch board record to determine board_id + project_id
+        board_id = None
+        project_id = None
+        try:
+            sel = f"$select={F_BOARD_ID},{F_PROJECT_ID}"
+            get_url = f"{DATAVERSE_BASE}{DATAVERSE_API}/{ENTITY_SET_BOARDS}({guid})?{sel}"
+            g = requests.get(get_url, headers=hdr, timeout=20)
+            if g.ok:
+                payload = g.json() or {}
+                board_id = payload.get(F_BOARD_ID)
+                project_id = payload.get(F_PROJECT_ID)
+        except Exception:
+            pass
+
+        # 2) Cascade delete tasks under this board (hard delete)
+        #    Tasks store board reference in crc6f_boardid (usually BRDxxx).
+        deleted_tasks = 0
+        task_errors = 0
+        if project_id and (board_id or guid):
+            try:
+                safe_pid = str(project_id).replace("'", "''")
+                safe_bid = str(board_id).replace("'", "''") if board_id else ""
+                safe_guid = str(guid).replace("'", "''")
+                # Match either board_id (BRD...) or, as fallback, the board guid
+                filters = [f"crc6f_projectid eq '{safe_pid}'"]
+                ors = []
+                if board_id:
+                    ors.append(f"crc6f_boardid eq '{safe_bid}'")
+                ors.append(f"crc6f_boardid eq '{safe_guid}'")
+                if ors:
+                    filters.append(f"({' or '.join(ors)})")
+                filter_expr = " and ".join(filters)
+                filter_q = urllib.parse.quote(filter_expr, safe="()'= $")
+                turl = f"{DATAVERSE_BASE}{DATAVERSE_API}/crc6f_hr_taskdetailses?$select=crc6f_hr_taskdetailsid&$filter={filter_q}"
+                t_res = requests.get(turl, headers=hdr, timeout=30)
+                if t_res.ok:
+                    tasks = t_res.json().get("value", [])
+                    for t in tasks:
+                        tid = t.get("crc6f_hr_taskdetailsid")
+                        if not tid:
+                            continue
+                        del_url = f"{DATAVERSE_BASE}{DATAVERSE_API}/crc6f_hr_taskdetailses({tid})"
+                        d = requests.delete(del_url, headers=hdr, timeout=20)
+                        if d.status_code in (200, 204):
+                            deleted_tasks += 1
+                        else:
+                            task_errors += 1
+            except Exception:
+                task_errors += 1
+
+        # 3) Delete the board record
         url = f"{DATAVERSE_BASE}{DATAVERSE_API}/{ENTITY_SET_BOARDS}({guid})"
         res = requests.delete(url, headers=hdr, timeout=20)
 
         if res.status_code in (200, 204):
-            return jsonify({"success": True, "message": "Board deleted"}), 200
-        else:
-            return jsonify({"success": False, "error": res.text}), 400
+            return jsonify({
+                "success": True,
+                "message": "Board deleted",
+                "deleted_tasks": deleted_tasks,
+                "task_delete_errors": task_errors,
+            }), 200
+        return jsonify({"success": False, "error": res.text}), 400
 
     except Exception as e:
         current_app.logger.exception("Error deleting board")

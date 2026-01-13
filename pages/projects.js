@@ -2444,9 +2444,7 @@ async function fetchBoards(projectId, canManageOverride = null) {
       ? canManageOverride
       : getProjectAccess().canManage;
   try {
-    const res = await fetch(
-      `http://localhost:5000/api/projects/${projectId}/boards`
-    );
+    const res = await fetch(`${API_ROOT}/api/projects/${projectId}/boards`);
     const data = await res.json();
 
     if (!res.ok || !data.success) {
@@ -2532,7 +2530,7 @@ function renderBoardsTable(boards, projectId, canManage) {
         if (!confirm("Delete this board?")) return;
         try {
           const res = await fetch(
-            `http://localhost:5000/api/projects/${projectId}/boards/${guid}`,
+            `${API_ROOT}/api/boards/${guid}`,
             { method: "DELETE" }
           );
           const data = await res.json();
@@ -2656,7 +2654,7 @@ async function deleteBoard(guid, projectId) {
   if (!confirm("🗑️ Are you sure you want to delete this board?")) return;
 
   try {
-    const res = await fetch(`http://localhost:5000/api/boards/${guid}`, {
+    const res = await fetch(`${API_ROOT}/api/boards/${guid}`, {
       method: "DELETE",
     });
     const data = await res.json();
