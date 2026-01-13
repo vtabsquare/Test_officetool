@@ -276,6 +276,13 @@ const syncSelectAllCheckbox = () => {
 
 // Check if current user is L3 level
 const isL3User = () => {
+    let role = '';
+    try {
+        role = String(state.user?.access_level || state.user?.role || localStorage.getItem('role') || '').trim().toUpperCase();
+    } catch (_) {
+        role = String(state.user?.access_level || state.user?.role || '').trim().toUpperCase();
+    }
+    if (role === 'L3') return true;
     const designation = String(state.user?.designation || '').trim().toLowerCase();
     const empId = String(state.user?.id || '').trim().toUpperCase();
     const email = String(state.user?.email || '').trim().toLowerCase();
