@@ -647,9 +647,10 @@ def _apply_intern_rpt(payload: dict) -> dict:
     """Apply intern details RPT mirroring to payload."""
     if not isinstance(payload, dict):
         return {}
-    for base_key, rpt_key in INTERN_RPT_MAP.items():
-        if base_key in payload and payload[base_key] not in (None, "", []):
-            payload[rpt_key] = payload[base_key]
+    # NOTE: Some Dataverse environments do not include the crc6f_RPT_* shadow
+    # fields on the intern details entity. Sending unknown properties causes
+    # a hard 400 from Dataverse ("Invalid property ... does not exist").
+    # To keep the API robust across environments, do not mirror RPT fields.
     return payload
 
 INTERN_FIELDS = {
