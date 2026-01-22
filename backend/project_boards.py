@@ -309,29 +309,76 @@ def board_exists(project_code, board_name):
 # ============================================================
 @bp.route("/projects/<project_code>/boards", methods=["GET"])
 def get_boards(project_code):
-    """Fetch all boards for a given project."""
+    """Fetch all boards for a given project with dynamic task and member counts."""
     try:
         token = get_access_token()
         hdr = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
+        # First, fetch all boards for the project
         url = (
             f"{DATAVERSE_BASE}{DATAVERSE_API}/{ENTITY_SET_BOARDS}"
             f"?$filter={F_PROJECT_ID} eq '{project_code}'"
-            f"&$select={F_GUID},{F_BOARD_ID},{F_BOARD_NAME},{F_DESC},{F_NO_TASKS},{F_NO_MEMBERS},{F_PROJECT_ID}"
+            f"&$select={F_GUID},{F_BOARD_ID},{F_BOARD_NAME},{F_DESC},{F_PROJECT_ID}"
         )
         res = requests.get(url, headers=hdr, timeout=20)
         if not res.ok:
             return jsonify({"success": False, "error": res.text}), 500
 
         boards = []
-        for r in res.json().get("value", []):
+        board_list = res.json().get("value", [])
+        
+        # If no boards, return empty list
+        if not board_list:
+            return jsonify({"success": True, "boards": []}), 200
+        
+        # Fetch all tasks for the project to count per board
+        tasks_url = f"{DATAVERSE_BASE}{DATAVERSE_API}/crc6f_hr_taskdetailses?$select=crc6f_boardid,crc6f_assignedto&$filter=crc6f_projectid eq '{project_code}'"
+        tasks_res = requests.get(tasks_url, headers=hdr, timeout=20)
+        
+        # Initialize task and member counts for each board
+        task_counts = {}
+        member_counts = {}
+        
+        if tasks_res.ok:
+            tasks = tasks_res.json().get("value", [])
+            for task in tasks:
+                board_id = task.get("crc6f_boardid")
+                assigned_to = task.get("crc6f_assignedto")
+                
+                if board_id:
+                    # Count tasks
+                    task_counts[board_id] = task_counts.get(board_id, 0) + 1
+                    
+                    # Count unique members (assigned_to)
+                    if assigned_to and assigned_to.strip():
+                        if board_id not in member_counts:
+                            member_counts[board_id] = set()
+                        member_counts[board_id].add(assigned_to.strip())
+        
+        # Build boards list with calculated counts
+        for r in board_list:
+            board_id = r.get(F_BOARD_ID)
+            board_guid = r.get(F_GUID)
+            
+            # Get task count
+            no_of_tasks = 0
+            if board_id:
+                no_of_tasks = task_counts.get(board_id, 0)
+            
+            # Get member count (count of unique assigned users)
+            no_of_members = 0
+            if board_id and board_guid in member_counts:
+                no_of_members = len(member_counts[board_guid])
+            elif board_id and board_id in member_counts:
+                no_of_members = len(member_counts[board_id])
+            
             boards.append({
-                "guid": r.get(F_GUID),
-                "board_id": r.get(F_BOARD_ID),
+                "guid": board_guid,
+                "board_id": board_id,
                 "board_name": r.get(F_BOARD_NAME),
                 "board_description": r.get(F_DESC),
-                "no_of_tasks": r.get(F_NO_TASKS, 0),
-                "no_of_members": r.get(F_NO_MEMBERS, 0),
+                "no_of_tasks": no_of_tasks,
+                "no_of_members": no_of_members,
                 "project_id": r.get(F_PROJECT_ID),
             })
 
