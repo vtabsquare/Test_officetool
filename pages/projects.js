@@ -1603,26 +1603,11 @@ const renderProjectDetails = (id, tab) => {
       enableDragDrop(id);
 
       // reattach dropdown & buttons
-      const dd = document.getElementById("crm-add-dd");
-      const menu = document.getElementById("crm-add-menu");
       if (!canManage) {
-        dd?.remove();
-        menu?.remove();
-      } else if (dd && menu) {
-        dd.addEventListener("click", () => {
-          menu.style.display = menu.style.display === "none" ? "block" : "none";
-        });
-        document.addEventListener("click", (ev) => {
-          if (!dd.contains(ev.target) && !menu.contains(ev.target))
-            menu.style.display = "none";
-        });
-        menu.querySelectorAll(".dropdown-item").forEach((i) =>
-          i.addEventListener("click", (e) => {
-            const type = e.currentTarget.dataset.type;
-            showTaskModal(id, "New", type);
-            menu.style.display = "none";
-          })
-        );
+        document.getElementById("crm-add-dd")?.remove();
+        document.getElementById("crm-add-menu")?.remove();
+      } else {
+        attachCRMEventHandlers(id);
       }
     });
   }
@@ -2724,7 +2709,21 @@ const crmTab = async (project) => {
   }
   const tasks = Array.isArray(tasksResult) ? tasksResult : [];
 
-  const cols = DEFAULT_COLS;
+  // Get columns from localStorage or use defaults
+  const storageKey = `crm_cols_${project.id}`;
+  let cols = JSON.parse(localStorage.getItem(storageKey) || "[]");
+  
+  // If no custom columns exist, use defaults
+  if (cols.length === 0) {
+    cols = [...DEFAULT_COLS];
+    // Save defaults to localStorage for consistency
+    localStorage.setItem(storageKey, JSON.stringify(cols));
+  }
+  
+  // Update global columns reference
+  if (typeof window !== "undefined") {
+    window.GLOBAL_CRM_COLS = cols;
+  }
   const grouped = cols.map((col) => ({
     name: col,
     items: tasks.filter(
@@ -2758,15 +2757,148 @@ const crmTab = async (project) => {
     })
     .join("");
 
+  // Add Plus button for creating new column
+  const addColumnButton = `
+    <div class="kan-list add-column-btn" onclick="showAddColumnModal('${project.id}', '${boardParam}')" style="background:transparent; border:2px dashed #cbd5e1; min-height:120px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.3s ease;">
+      <div style="text-align:center; color:#64748b;">
+        <i class="fa-solid fa-plus" style="font-size:24px; margin-bottom:8px; display:block;"></i>
+        <span style="font-size:14px; font-weight:500;">Add Column</span>
+      </div>
+    </div>
+  `;
+
   return `
     <div class="board-header" style="margin-bottom:10px; font-weight:700; color:#0f172a;">
       Board: ${boardName}
     </div>
     <div class="kan-wrap">
       ${listsHtml}
+      ${addColumnButton}
     </div>
+    <style>
+      .add-column-btn:hover {
+        background: #f8fafc !important;
+        border-color: #94a3b8 !important;
+        transform: scale(1.02);
+      }
+      .add-column-btn:hover i,
+      .add-column-btn:hover span {
+        color: #475569 !important;
+      }
+    </style>
   `;
 };
+
+// ==========================
+// Add Column Modal
+// ==========================
+function showAddColumnModal(projectId, boardParam) {
+  const formHTML = `
+    <div class="form-group" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label for="col-name" style="font-weight:600;">Column Name</label>
+        <input type="text" id="col-name" placeholder="Enter column name (e.g., 'In Review')" style="padding:10px; border-radius:10px; border:1px solid var(--border-color);" maxlength="50" />
+        <small style="color:#64748b;">Choose a name for your new status column</small>
+      </div>
+    </div>
+  `;
+  
+  renderModal("Add New Column", formHTML, "col-add-submit", "normal", "Add Column");
+  
+  const form = document.getElementById("modal-form");
+  if (form) {
+    form.addEventListener("submit", handleAddColumn);
+  }
+  
+  // Focus on the input field
+  setTimeout(() => {
+    const input = document.getElementById("col-name");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 100);
+}
+
+async function handleAddColumn(e) {
+  e.preventDefault();
+  const columnName = document.getElementById("col-name").value.trim();
+  
+  if (!columnName) {
+    alert("Please enter a column name");
+    return;
+  }
+  
+  // Check if column already exists
+  const currentHash = window.location.hash;
+  const params = new URLSearchParams(currentHash.split("?")[1]);
+  const projectId = params.get("id");
+  
+  // Get existing columns from localStorage or use defaults
+  const storageKey = `crm_cols_${projectId}`;
+  let existingCols = JSON.parse(localStorage.getItem(storageKey) || "[]");
+  
+  // Merge with default columns if not already done
+  if (existingCols.length === 0) {
+    existingCols = [...DEFAULT_COLS];
+  }
+  
+  // Check for duplicates (case-insensitive)
+  if (existingCols.some(col => col.toLowerCase() === columnName.toLowerCase())) {
+    alert("A column with this name already exists");
+    return;
+  }
+  
+  // Add new column
+  existingCols.push(columnName);
+  localStorage.setItem(storageKey, JSON.stringify(existingCols));
+  
+  // Update global columns
+  if (typeof window !== "undefined") {
+    window.GLOBAL_CRM_COLS = existingCols;
+  }
+  
+  closeModal();
+  
+  // Refresh the CRM tab
+  const project = { id: projectId };
+  crmTab(project).then(html => {
+    const crmContainer = document.getElementById("crm-container");
+    if (crmContainer) {
+      crmContainer.innerHTML = html;
+      enableDragDrop(projectId);
+      
+      // Reattach event handlers
+      attachCRMEventHandlers(projectId);
+    }
+  });
+}
+
+// Make showAddColumnModal globally accessible
+if (typeof window !== "undefined") {
+  window.showAddColumnModal = showAddColumnModal;
+}
+
+function attachCRMEventHandlers(projectId) {
+  // Reattach dropdown and buttons
+  const dd = document.getElementById("crm-add-dd");
+  const menu = document.getElementById("crm-add-menu");
+  
+  if (dd && menu) {
+    dd.onclick = (e) => {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === "none" ? "block" : "none";
+    };
+    
+    menu.querySelectorAll(".dropdown-item").forEach(btn =>
+      btn.addEventListener("click", (e) => {
+        const type = e.currentTarget.dataset.type;
+        showTaskModal(projectId, "New", type);
+        menu.style.display = "none";
+      })
+    );
+  }
+}
 
 const taskCardHtml = (t, index) => {
   const taskTitle = t.task_name || "Untitled Task";
