@@ -2668,15 +2668,15 @@ if (typeof window !== "undefined") {
 function getDefaultColor(name) {
   switch (name.trim().toLowerCase()) {
     case "new":
-      return "#d9d9d9"; // soft grey
+      return "linear-gradient(180deg, #4a5568 0%, #718096 100%)"; // dark to medium grey gradient
     case "in progress":
-      return "#fff4b8"; // pastel yellow
+      return "linear-gradient(180deg, #d69e2e 0%, #f6e05e 100%)"; // dark yellow to light yellow gradient
     case "hold":
-      return "#fcd4d4"; // pastel pink
+      return "linear-gradient(180deg, #c53030 0%, #fc8181 100%)"; // dark red to light red gradient
     case "completed":
-      return "#d5f6de"; // pastel green
+      return "linear-gradient(180deg, #38a169 0%, #68d391 100%)"; // dark green to light green gradient
     default:
-      return "#f4f4f4"; // very light grey
+      return "linear-gradient(180deg, #4a5568 0%, #718096 100%)"; // default grey gradient
   }
 }
 
@@ -2763,20 +2763,22 @@ const crmTab = async (project) => {
       const bg = col.color;
       const itemsHtml = col.items.length
         ? col.items.map((t, idx) => taskCardHtml(t, idx)).join("")
-        : `<div class="placeholder-text">No tasks</div>`;
+        : `<div class="placeholder-text" style="color:rgba(255,255,255,0.7);">No tasks</div>`;
 
       return `
-      <div class="kan-list" data-col="${col.name}" style="background:${bg}; border-color:${bg}; position:relative;">
-        <div class="kan-head" style="display:flex; justify-content:space-between; align-items:center;">
-          <strong>${col.name}</strong>
+      <div class="kan-list" data-col="${col.name}" style="background:${bg}; border:none; position:relative; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        <div class="kan-head" style="display:flex; justify-content:space-between; align-items:center; color:white; padding:12px 16px;">
+          <strong style="font-size:14px; font-weight:600;">${col.name}</strong>
           <div style="display:flex; align-items:center; gap:8px;">
-            <span class="badge">${col.items.length}</span>
-            <button class="delete-col-btn" onclick="deleteColumn('${project.id}', '${col.name}')" style="background:none; border:none; color:#dc2626; cursor:pointer; padding:2px; font-size:14px;" title="Delete column">
+            <span class="badge" style="background:rgba(255,255,255,0.2); color:white;">${col.items.length}</span>
+            <button class="delete-col-btn" onclick="deleteColumn('${project.id}', '${col.name}')" style="background:none; border:none; color:rgba(255,255,255,0.8); cursor:pointer; padding:2px; font-size:14px;" title="Delete column">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
         </div>
-        ${itemsHtml}
+        <div style="padding:0 16px 16px;">
+          ${itemsHtml}
+        </div>
       </div>
     `;
     })
@@ -3050,20 +3052,20 @@ const taskCardHtml = (t, index) => {
     : "—";
 
   return `
-    <div class="kan-card modern" draggable="true" data-id="${t.guid}">
-      <div class="card-top">
-        <span class="card-title"><strong>${taskNumber ? taskNumber + ". " : ""
+    <div class="kan-card modern" draggable="true" data-id="${t.guid}" style="background:rgba(255,255,255,0.95); border-radius:8px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+      <div class="card-top" style="padding:12px;">
+        <span class="card-title" style="color:#1f2937; font-size:14px; line-height:1.4;"><strong>${taskNumber ? taskNumber + ". " : ""
     }${taskTitle}</strong></span>
       </div>
 
-      <div class="card-mid">
+      <div class="card-mid" style="padding:0 12px;">
         <div class="assignees">${assignedPeople || ""}</div>
       </div>
       
-      <div class="task-separator"></div>
+      <div class="task-separator" style="height:1px; background:rgba(0,0,0,0.1); margin:8px 12px;"></div>
 
-      <div class="card-bottom" style="margin-top:6px;">
-        <span class="due-pill ${dueColor}">${dueString}</span>
+      <div class="card-bottom" style="padding:0 12px 12px; display:flex; justify-content:flex-end;">
+        <span class="due-pill ${dueColor}" style="font-size:12px; padding:2px 8px; border-radius:12px; background:${dueColor === 'red' ? '#fee2e2' : dueColor === 'orange' ? '#fed7aa' : '#dcfce7'}; color:${dueColor === 'red' ? '#dc2626' : dueColor === 'orange' ? '#ea580c' : '#16a34a'};">${dueString}</span>
       </div>
     </div>
   `;
