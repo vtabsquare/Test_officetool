@@ -349,6 +349,10 @@ const fetchPeopleOnLeave = async (employees = []) => {
 };
 
 const buildDashboardLayout = (data) => {
+    const today = new Date();
+    const fallbackWeekStart = getWeekStart(today);
+    const fallbackWeekEnd = getWeekEnd(today);
+    const weekRange = data.weekRange || `${fallbackWeekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${fallbackWeekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
     const greetingName = (data.user?.name || data.user?.first_name || 'there').split(' ')[0];
     const heroStats = [
         { label: 'On leave today', value: data.peopleOnLeave.length },
@@ -918,6 +922,7 @@ const loadDashboardData = async () => {
         pendingLeaves,
         totalEmployees: employees.length,
         currentEmployee,
+        weekRange,
     };
 };
 
