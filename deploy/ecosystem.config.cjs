@@ -6,9 +6,9 @@ module.exports = {
     {
       name: "vtab-backend",
       cwd: "/var/www/vtab/backend",
-      script: "gunicorn",
+      script: "/var/www/vtab/backend/venv/bin/gunicorn",
       args: "unified_server:app --bind 127.0.0.1:5000 --workers 2 --timeout 120 --access-logfile - --error-logfile -",
-      interpreter: "/var/www/vtab/backend/venv/bin/python",
+      interpreter: "none",
       env: {
         FLASK_ENV: "production",
         PORT: "5000",
