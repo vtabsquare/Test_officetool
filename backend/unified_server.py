@@ -181,6 +181,7 @@ app.config['MAIL_PORT'] = 587  # Port for TLS
 app.config['MAIL_USE_TLS'] = True   # Enable TLS encryption
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')    # Sender email address
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')      # App password or SMTP key
+app.config['MAIL_TIMEOUT'] = 10  # 10 second timeout to prevent hanging on blocked SMTP
 
 # 📨 Default sender address (if not provided in individual emails)
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
