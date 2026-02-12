@@ -13120,12 +13120,13 @@ def get_login_events():
 
 # ================== MAIN ==================
 # Register timesheet routes
-try:
-    from timesheet_routes import register_timesheet_routes
-    register_timesheet_routes(app, get_access_token, RESOURCE, TIMESHEET_ENTITY, _apply_timesheet_rpt, create_record)
-    print("[OK] Timesheet routes registered")
-except Exception as e:
-    print(f"[WARN] Failed to register timesheet routes: {e}")
+# NOTE: Commented out to avoid conflicts with time_tracking.py routes
+# try:
+#     from timesheet_routes import register_timesheet_routes
+#     register_timesheet_routes(app, get_access_token, RESOURCE, TIMESHEET_ENTITY, _apply_timesheet_rpt, create_record)
+#     print("[OK] Timesheet routes registered")
+# except Exception as e:
+#     print(f"[WARN] Failed to register timesheet routes: {e}")
 
 if __name__ == '__main__':
     print("\n" + "=" * 80)
