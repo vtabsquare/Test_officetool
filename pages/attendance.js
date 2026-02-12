@@ -345,14 +345,54 @@ const renderAttendanceTrackerPage = async (mode) => {
         // Generate table rows for filtered week/month data
         let entryExitDetailsHTML = '';
         if (filteredAttendanceData.length > 0) {
+            // Fetch login activity for the filtered dates to get accurate checkout times
+            const loginActivityMap = new Map();
+            try {
+                const startDate = new Date(Math.min(...filteredAttendanceData.map(d => new Date(year, month, d.day || 1))));
+                const endDate = new Date(Math.max(...filteredAttendanceData.map(d => new Date(year, month, d.day || 1))));
+                const fromStr = startDate.toISOString().split('T')[0];
+                const toStr = endDate.toISOString().split('T')[0];
+                
+                const loginData = await fetchLoginEvents({
+                    employee_id: String(state.user.id || '').toUpperCase(),
+                    from: fromStr,
+                    to: toStr
+                });
+                
+                if (loginData.success && loginData.daily_summary) {
+                    loginData.daily_summary.forEach(day => {
+                        loginActivityMap.set(day.date, day);
+                    });
+                }
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch login activity for week/month:', err);
+            }
+            
             entryExitDetailsHTML = filteredAttendanceData.map(d => {
                 // Validate the day property
                 const day = d.day || 1;
                 const dayStr = String(day).padStart(2, '0');
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${dayStr}`;
                 
-                // Validate check-in and check-out times
-                const checkInTime = d.checkIn || '--:--:--';
-                const checkOutTime = d.checkOut || '--:--:--';
+                // Get check-in/check-out from login activity if available (more accurate)
+                let checkInTime = d.checkIn || '--:--:--';
+                let checkOutTime = d.checkOut || '--:--:--';
+                
+                const loginActivity = loginActivityMap.get(dateStr);
+                if (loginActivity) {
+                    if (loginActivity.check_in_time) {
+                        const checkInDate = new Date(loginActivity.check_in_time);
+                        if (!isNaN(checkInDate.getTime())) {
+                            checkInTime = checkInDate.toTimeString().split(' ')[0].substring(0, 8);
+                        }
+                    }
+                    if (loginActivity.check_out_time) {
+                        const checkOutDate = new Date(loginActivity.check_out_time);
+                        if (!isNaN(checkOutDate.getTime())) {
+                            checkOutTime = checkOutDate.toTimeString().split(' ')[0].substring(0, 8);
+                        }
+                    }
+                }
                 
                 // Calculate total time:
                 // 1) Prefer duration (backend-provided) when numeric
