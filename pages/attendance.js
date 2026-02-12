@@ -348,10 +348,24 @@ const renderAttendanceTrackerPage = async (mode) => {
             // Fetch login activity for the filtered dates to get accurate checkout times
             const loginActivityMap = new Map();
             try {
+                // Always include today in the date range if we're viewing current month
+                const today = new Date();
+                const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+                
                 const startDate = new Date(Math.min(...filteredAttendanceData.map(d => new Date(year, month, d.day || 1))));
                 const endDate = new Date(Math.max(...filteredAttendanceData.map(d => new Date(year, month, d.day || 1))));
+                
+                // If current month, ensure we include today's date
+                if (isCurrentMonth) {
+                    if (endDate < today) {
+                        endDate = today;
+                    }
+                }
+                
                 const fromStr = startDate.toISOString().split('T')[0];
                 const toStr = endDate.toISOString().split('T')[0];
+                
+                console.log(`Fetching login activity from ${fromStr} to ${toStr}`);
                 
                 const loginData = await fetchLoginEvents({
                     employee_id: String(state.user.id || '').toUpperCase(),
@@ -363,6 +377,7 @@ const renderAttendanceTrackerPage = async (mode) => {
                     loginData.daily_summary.forEach(day => {
                         loginActivityMap.set(day.date, day);
                     });
+                    console.log('Login activity data loaded:', loginData.daily_summary.length, 'days');
                 }
             } catch (err) {
                 console.warn('⚠️ Failed to fetch login activity for week/month:', err);
@@ -380,6 +395,7 @@ const renderAttendanceTrackerPage = async (mode) => {
                 
                 const loginActivity = loginActivityMap.get(dateStr);
                 if (loginActivity) {
+                    // Use login activity data as the primary source
                     if (loginActivity.check_in_time) {
                         const checkInDate = new Date(loginActivity.check_in_time);
                         if (!isNaN(checkInDate.getTime())) {
@@ -391,6 +407,15 @@ const renderAttendanceTrackerPage = async (mode) => {
                         if (!isNaN(checkOutDate.getTime())) {
                             checkOutTime = checkOutDate.toTimeString().split(' ')[0].substring(0, 8);
                         }
+                    }
+                    
+                    // For debugging
+                    if (dateStr === '2026-02-12') {
+                        console.log(`Login activity for ${dateStr}:`, {
+                            checkIn: checkInTime,
+                            checkOut: checkOutTime,
+                            original: { checkIn: d.checkIn, checkOut: d.checkOut }
+                        });
                     }
                 }
                 
