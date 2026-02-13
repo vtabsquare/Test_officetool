@@ -12670,15 +12670,20 @@ def get_comp_off():
         employees = employee_response.json().get('value', [])
 
         # 2️⃣ Fetch comp off details
-        compoff_url = f"{BASE_URL}/crc6f_hr_leavemangements"
+        leave_entity = LEAVE_BALANCE_ENTITY_RESOLVED or LEAVE_BALANCE_ENTITY
+        compoff_url = f"{BASE_URL}/{leave_entity}"
         compoff_response = requests.get(
             compoff_url,
             headers={"Authorization": f"Bearer {token}"}
         )
         compoffs = compoff_response.json().get('value', [])
 
-        # Build quick lookups
-        leave_map = { (c.get("crc6f_employeeid") or "").upper(): c for c in compoffs }
+        # Build quick lookups - try both FK field names
+        leave_map = {}
+        for c in compoffs:
+            eid = (c.get("crc6f_employeeid") or c.get("crc6f_empid") or "").upper()
+            if eid:
+                leave_map[eid] = c
         normalized_requests = []
         try:
             comp_req_url = f"{BASE_URL}/crc6f_compensatoryrequests"
@@ -12739,7 +12744,8 @@ def update_comp_off(employee_id):
             return jsonify({"status": "error", "message": "Missing available_compoff field"}), 400
 
         # [OK] 1. Get the record ID of the employee in Dataverse
-        get_url = f"{BASE_URL}/crc6f_hr_leavemangements?$filter=crc6f_employeeid eq '{employee_id}'"
+        leave_entity = LEAVE_BALANCE_ENTITY_RESOLVED or LEAVE_BALANCE_ENTITY
+        get_url = f"{BASE_URL}/{leave_entity}?$filter=crc6f_employeeid eq '{employee_id}'"
         # Convert to string for Dataverse
         update_data = {"crc6f_compoff": str(new_balance)}
         token = get_access_token()
@@ -12759,7 +12765,7 @@ def update_comp_off(employee_id):
         record_id = records[0]["crc6f_hr_leavemangementid"]
 
         # [OK] 2. Update the comp off field in Dataverse
-        update_url = f"{BASE_URL}/crc6f_hr_leavemangements({record_id})"
+        update_url = f"{BASE_URL}/{leave_entity}({record_id})"
         update_data = {"crc6f_compoff": str(new_balance)}
 
         patch_response = requests.patch(update_url, headers=headers, json=update_data)
