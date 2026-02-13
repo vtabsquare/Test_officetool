@@ -4036,6 +4036,37 @@ const handleCompOffApprove = async (requestId) => {
             const req = { ...list[idx], status: 'Approved' };
             list[idx] = req;
             localStorage.setItem('compoff_requests', JSON.stringify(list));
+
+            // Credit the comp off balance in the backend
+            const employeeId = req.employeeId;
+            if (employeeId) {
+                try {
+                    // Fetch current comp off balance
+                    const balResp = await fetch(`${apiBase}/api/comp-off`);
+                    if (balResp.ok) {
+                        const balData = await balResp.json();
+                        const empData = (balData.data || []).find(
+                            e => (e.employee_id || '').toUpperCase() === employeeId.toUpperCase()
+                        );
+                        const currentBalance = empData ? (empData.raw_compoff || 0) : 0;
+                        const newBalance = currentBalance + 1;
+                        // Update the comp off balance
+                        const updateResp = await fetch(`${apiBase}/api/comp-off/${encodeURIComponent(employeeId)}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ available_compoff: newBalance })
+                        });
+                        if (updateResp.ok) {
+                            console.log(`✅ Comp Off balance updated for ${employeeId}: ${currentBalance} -> ${newBalance}`);
+                        } else {
+                            console.error(`❌ Failed to update comp off balance for ${employeeId}`);
+                        }
+                    }
+                } catch (balErr) {
+                    console.error('❌ Error updating comp off balance:', balErr);
+                }
+            }
+
             try { await notifyEmployeeCompOffGranted(req.id, req.employeeId); } catch { }
         }
         alert('✅ Comp Off granted');
