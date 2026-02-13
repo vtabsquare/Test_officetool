@@ -198,7 +198,6 @@ export const renderInternsPage = async (filter = internSearch, page = internPage
         </button>
       </div>
       <div class="employee-control-actions">
-        <button id="add-intern-btn" class="btn btn-primary"><i class="fa-solid fa-plus"></i> ADD INTERN</button>
       </div>
     </div>
   `;
