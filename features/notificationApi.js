@@ -8,15 +8,24 @@ import { showLeaveApprovalToast, showLeaveRejectionToast } from '../components/t
  * - Admin: Shows count of pending leave requests (awaiting approval)
  * - Employee: Shows count of their pending requests
  */
+let _badgeLastUpdated = 0;
+const BADGE_CACHE_TTL = 15000; // 15 seconds
 export const updateNotificationBadge = async () => {
     try {
+        // Skip if updated recently
+        const now = Date.now();
+        if (now - _badgeLastUpdated < BADGE_CACHE_TTL) {
+            return;
+        }
+
         const employeeId = state.user?.id || state.user?.employee_id;
         const email = state.user?.email || '';
         
         if (!employeeId) {
-            console.warn('⚠️ No employee ID found, skipping badge update');
             return;
         }
+
+        _badgeLastUpdated = now;
 
         // Check if user is admin
         const isAdmin = employeeId.toUpperCase() === 'EMP001' || email.toLowerCase() === 'bala.t@vtab.com';
@@ -27,14 +36,12 @@ export const updateNotificationBadge = async () => {
             const compOffAll = JSON.parse(localStorage.getItem('compoff_requests') || '[]');
             const pendingCompOff = compOffAll.filter(r => (r.status || 'pending').toLowerCase() === 'pending');
             count = (pendingLeaves?.length || 0) + (pendingCompOff.length || 0);
-            console.log(`🔔 Admin notification badge: ${count} pending items`);
         } else {
             const allLeaves = await fetchEmployeeLeaves(employeeId);
             const myPendingLeaves = allLeaves.filter(l => l.status?.toLowerCase() === 'pending');
             const compOffAll = JSON.parse(localStorage.getItem('compoff_requests') || '[]');
             const myPendingCompOff = compOffAll.filter(r => String(r.employeeId).toUpperCase() === String(employeeId).toUpperCase() && (r.status || 'pending').toLowerCase() === 'pending');
             count = (myPendingLeaves.length || 0) + (myPendingCompOff.length || 0);
-            console.log(`🔔 Employee notification badge: ${count} pending requests`);
         }
 
         // Update badge

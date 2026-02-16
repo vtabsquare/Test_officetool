@@ -15,34 +15,43 @@ const renderAccessDenied = (redirectPath = '#/') => {
   `;
 };
 
+// Module cache to avoid re-importing on every navigation
+const moduleCache = new Map();
+const cachedImport = (path) => {
+  if (!moduleCache.has(path)) {
+    moduleCache.set(path, import(path));
+  }
+  return moduleCache.get(path);
+};
+
 const loaders = {
-  "/": async () => (await import('./pages/home.js')).renderHomePage,
-  "/employees": async () => (await import('./pages/employees.js')).renderEmployeesPage,
-  "/interns": async () => (await import('./pages/interns.js')).renderInternsPage,
-  "/employees/bulk-upload": async () => (await import('./pages/employees.js')).renderBulkUploadPage,
-  "/employees/bulk-delete": async () => (await import('./pages/employees.js')).renderBulkDeletePage,
-  "/team-management": async () => (await import('./pages/teamManagement.js')).renderTeamManagementPage,
-  "/inbox": async () => (await import('./pages/shared.js')).renderInboxPage,
-  "/meet": async () => (await import('./pages/meet_redesign.js')).renderMeetPage,
-  "/chat": async () => (await import('./pages/chats.js')).renderChatPage,
-  "/time-tracker": async () => (await import('./pages/shared.js')).renderTimeTrackerPage,
-  "/time-my-tasks": async () => (await import('./pages/shared.js')).renderMyTasksPage,
-  "/time-my-timesheet": async () => (await import('./pages/shared.js')).renderMyTimesheetPage,
-  "/time-team-timesheet": async () => (await import('./pages/shared.js')).renderTeamTimesheetPage,
-  "/time-clients": async () => (await import('./pages/shared.js')).renderTTClientsPage,
-  "/time-projects": async () => (await import('./pages/projects.js')).renderProjectsRoute,
-  "/leave-tracker": async () => (await import('./pages/leaveTracker.js')).renderLeaveTrackerPage,
-  "/leave-my": async () => (await import('./pages/leaveTracker.js')).renderLeaveTrackerPage,
-  "/leave-team": async () => (await import('./pages/leaveTracker.js')).renderLeaveTrackerPage,
-  "/leave-settings": async () => (await import('./pages/leaveSettings.js')).renderLeaveSettingsPage,
-  "/login-settings": async () => (await import('./pages/loginSettings.js')).renderLoginSettingsPage,
-  "/compoff": async () => (await import('./pages/comp_off.js')).renderCompOffPage,
-  "/attendance-my": async () => (await import('./pages/attendance.js')).renderMyAttendancePage,
-  "/attendance-team": async () => (await import('./pages/attendance.js')).renderTeamAttendancePage,
-  "/assets": async () => (await import('./pages/assets.js')).renderAssetsPage,
-  "/attendance-holidays": async () => (await import('./pages/holidays.js')).renderHolidaysPage,
-  "/onboarding": async () => (await import('./pages/onboarding.js')).renderOnboardingPage,
-  "/interns/detail": async () => (await import('./pages/internDetail.js')).renderInternDetailPage,
+  "/": async () => (await cachedImport('./pages/home.js')).renderHomePage,
+  "/employees": async () => (await cachedImport('./pages/employees.js')).renderEmployeesPage,
+  "/interns": async () => (await cachedImport('./pages/interns.js')).renderInternsPage,
+  "/employees/bulk-upload": async () => (await cachedImport('./pages/employees.js')).renderBulkUploadPage,
+  "/employees/bulk-delete": async () => (await cachedImport('./pages/employees.js')).renderBulkDeletePage,
+  "/team-management": async () => (await cachedImport('./pages/teamManagement.js')).renderTeamManagementPage,
+  "/inbox": async () => (await cachedImport('./pages/shared.js')).renderInboxPage,
+  "/meet": async () => (await cachedImport('./pages/meet_redesign.js')).renderMeetPage,
+  "/chat": async () => (await cachedImport('./pages/chats.js')).renderChatPage,
+  "/time-tracker": async () => (await cachedImport('./pages/shared.js')).renderTimeTrackerPage,
+  "/time-my-tasks": async () => (await cachedImport('./pages/shared.js')).renderMyTasksPage,
+  "/time-my-timesheet": async () => (await cachedImport('./pages/shared.js')).renderMyTimesheetPage,
+  "/time-team-timesheet": async () => (await cachedImport('./pages/shared.js')).renderTeamTimesheetPage,
+  "/time-clients": async () => (await cachedImport('./pages/shared.js')).renderTTClientsPage,
+  "/time-projects": async () => (await cachedImport('./pages/projects.js')).renderProjectsRoute,
+  "/leave-tracker": async () => (await cachedImport('./pages/leaveTracker.js')).renderLeaveTrackerPage,
+  "/leave-my": async () => (await cachedImport('./pages/leaveTracker.js')).renderLeaveTrackerPage,
+  "/leave-team": async () => (await cachedImport('./pages/leaveTracker.js')).renderLeaveTrackerPage,
+  "/leave-settings": async () => (await cachedImport('./pages/leaveSettings.js')).renderLeaveSettingsPage,
+  "/login-settings": async () => (await cachedImport('./pages/loginSettings.js')).renderLoginSettingsPage,
+  "/compoff": async () => (await cachedImport('./pages/comp_off.js')).renderCompOffPage,
+  "/attendance-my": async () => (await cachedImport('./pages/attendance.js')).renderMyAttendancePage,
+  "/attendance-team": async () => (await cachedImport('./pages/attendance.js')).renderTeamAttendancePage,
+  "/assets": async () => (await cachedImport('./pages/assets.js')).renderAssetsPage,
+  "/attendance-holidays": async () => (await cachedImport('./pages/holidays.js')).renderHolidaysPage,
+  "/onboarding": async () => (await cachedImport('./pages/onboarding.js')).renderOnboardingPage,
+  "/interns/detail": async () => (await cachedImport('./pages/internDetail.js')).renderInternDetailPage,
 };
 
 export const router = async () => {

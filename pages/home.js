@@ -1,11 +1,11 @@
 import { getPageContentHTML } from '../utils.js';
 import { checkForNewLeaveNotifications } from '../features/notificationApi.js';
 import { fetchEmployeeLeaves, fetchPendingLeaves, fetchOnLeaveToday } from '../features/leaveApi.js';
-import { listEmployees } from '../features/employeeApi.js';
+import { listEmployees, listAllEmployees } from '../features/employeeApi.js';
 import { getHolidays } from '../features/holidaysApi.js';
 import { fetchMonthlyAttendance } from '../features/attendanceApi.js';
 import { state } from '../state.js';
-import { cachedFetch, TTL, getPageState, cachePageState } from '../features/cache.js';
+import { cachedFetch, TTL, getPageState, cachePageState, clearCacheByPrefix } from '../features/cache.js';
 import { isAdminUser } from '../utils/accessControl.js';
 import { apiBase } from '../config.js';
 
@@ -823,24 +823,25 @@ const loadDashboardData = async () => {
     const weekEnd = getWeekEnd(today);
     const weekRange = `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-    // Fetch employees (paged) and also full directory (cached) to improve DOJ coverage
-    const employeesResponse = await cachedFetch('employees_list', async () => {
-        try {
-            return await listEmployees(1, 500);
-        } catch (err) {
-            console.warn('⚠️ Failed to fetch employees:', err);
-            return { items: [] };
-        }
-    }, TTL.LONG);
-
-    const allEmployees = await cachedFetch('employees_all', async () => {
-        try {
-            return await listAllEmployees();
-        } catch (err) {
-            console.warn('⚠️ Failed to fetch full employee directory:', err);
-            return [];
-        }
-    }, TTL.LONG);
+    // Fetch employees (paged) and full directory in PARALLEL (cached)
+    const [employeesResponse, allEmployees] = await Promise.all([
+        cachedFetch('employees_list', async () => {
+            try {
+                return await listEmployees(1, 500);
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch employees:', err);
+                return { items: [] };
+            }
+        }, TTL.LONG),
+        cachedFetch('employees_all', async () => {
+            try {
+                return await listAllEmployees();
+            } catch (err) {
+                console.warn('⚠️ Failed to fetch full employee directory:', err);
+                return [];
+            }
+        }, TTL.LONG)
+    ]);
 
     let employees = employeesResponse?.items || [];
     // Merge full list if available
@@ -1073,12 +1074,20 @@ const setupRefreshButton = () => {
     }
 };
 
+let _dashboardAutoRefreshId = null;
 const setupAutoRefresh = () => {
+    // Clear any existing interval to prevent leaks
+    if (_dashboardAutoRefreshId) {
+        clearInterval(_dashboardAutoRefreshId);
+        _dashboardAutoRefreshId = null;
+    }
     // Auto-refresh every 5 minutes
-    setInterval(async () => {
-        console.log('🔄 Auto-refreshing dashboard...');
-        await loadDashboardData();
-        await renderHomePage();
+    _dashboardAutoRefreshId = setInterval(async () => {
+        if (window.location.hash !== '#/' && window.location.hash !== '') return;
+        try {
+            await loadDashboardData();
+            await renderHomePage();
+        } catch { }
     }, 5 * 60 * 1000);
 };
 

@@ -375,33 +375,48 @@ const openTeamTsEditModal = async (employeeId, workDate) => {
     }, 30);
 };
 
-// Resolve current employee ID
+// Resolve current employee ID (cached to avoid repeated 5000-employee fetches)
+let _resolvedEmpIdCache = null;
+let _resolvedEmpIdPromise = null;
 const resolveCurrentEmployeeId = async () => {
-    let empId = String(state.user?.id || '').trim().toUpperCase();
-    const userName = state.user?.name;
-    console.log('My Tasks - Initial empId:', empId, 'userName:', userName);
+    // Return cached result if available
+    if (_resolvedEmpIdCache) return _resolvedEmpIdCache;
+    // Deduplicate concurrent calls
+    if (_resolvedEmpIdPromise) return _resolvedEmpIdPromise;
+    _resolvedEmpIdPromise = (async () => {
+        let empId = String(state.user?.id || '').trim().toUpperCase();
+        const userName = state.user?.name;
+        try {
+            const allEmployees = await listEmployees(1, 5000);
+            if (empId && empId.startsWith('EMP')) {
+                const matchId = (allEmployees.items || []).find(e => (e.employee_id || '').toUpperCase() === empId);
+                if (matchId) {
+                    _resolvedEmpIdCache = empId;
+                    return empId;
+                }
+            }
+            if (userName) {
+                const match = (allEmployees.items || []).find(e => {
+                    const empFullName = `${e.first_name || ''} ${e.last_name || ''}`.trim().toLowerCase();
+                    return empFullName === userName.toLowerCase().trim();
+                });
+                if (match && match.employee_id) {
+                    empId = match.employee_id.trim().toUpperCase();
+                    state.user.id = empId;
+                    _resolvedEmpIdCache = empId;
+                    return empId;
+                }
+            }
+        } catch { }
+        if (empId) _resolvedEmpIdCache = empId;
+        return empId;
+    })();
     try {
-        const allEmployees = await listEmployees(1, 5000);
-        if (empId && empId.startsWith('EMP')) {
-            const matchId = (allEmployees.items || []).find(e => (e.employee_id || '').toUpperCase() === empId);
-            if (matchId) {
-                console.log('My Tasks - Employee ID resolved by ID:', empId);
-                return empId;
-            }
-        }
-        if (userName) {
-            const match = (allEmployees.items || []).find(e => {
-                const empFullName = `${e.first_name || ''} ${e.last_name || ''}`.trim().toLowerCase();
-                return empFullName === userName.toLowerCase().trim();
-            });
-            if (match && match.employee_id) {
-                empId = match.employee_id.trim().toUpperCase();
-                state.user.id = empId;
-                return empId;
-            }
-        }
-    } catch { }
-    return empId;
+        const result = await _resolvedEmpIdPromise;
+        return result;
+    } finally {
+        _resolvedEmpIdPromise = null;
+    }
 };
 
 export const renderTimeTrackerPage = () => {
@@ -1663,14 +1678,15 @@ export const renderTeamTimesheetPage = async () => {
         const daysInMonth = new Date(year, m + 1, 0).getDate();
         const days = Array.from({ length: daysInMonth }, (_, i) => new Date(year, m, i + 1));
 
-        // Fetch all employees
-        const all = await listEmployees(1, 5000);
+        // Fetch all employees and resolve current user in parallel
+        const [all, currentEmpId] = await Promise.all([
+            cachedFetch('tt_team_employees', () => listEmployees(1, 5000), TTL.LONG),
+            resolveCurrentEmployeeId().then(id => id || String(state.user?.id || '').toUpperCase())
+        ]);
         const allItems = (all.items || []).map(e => ({
             id: (e.employee_id || '').toUpperCase(),
             name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || (e.employee_id || '')
         }));
-        // Determine current user and admin (kept for other logic), but show ALL employees
-        const currentEmpId = (await resolveCurrentEmployeeId()) || String(state.user?.id || '').toUpperCase();
         const isAdmin = isAdminUser();
         let items = allItems;
 
