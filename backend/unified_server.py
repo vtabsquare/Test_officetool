@@ -9818,14 +9818,23 @@ def get_all_employee_leave_allocations():
         
         # Fetch all records from leave management table
         url = f"{RESOURCE}/api/data/v9.2/crc6f_hr_leavemangements?$top=5000"
+        print(f"[URL] Fetching from: {url}")
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
             print(f"[ERROR] Failed to fetch allocations: {response.status_code}")
+            print(f"[ERROR] Response: {response.text}")
             return jsonify({"success": False, "error": "Failed to fetch leave allocations"}), 500
         
         records = response.json().get("value", [])
-        print(f"[DATA] Found {len(records)} leave allocation records")
+        print(f"[DATA] Found {len(records)} leave allocation records in database")
+        
+        # Log first few records for debugging
+        if records:
+            print(f"[DEBUG] Sample record keys: {list(records[0].keys())}")
+            print(f"[DEBUG] First record: {records[0]}")
+        else:
+            print(f"[WARN] No records found in crc6f_hr_leavemangements table!")
         
         # Format the response
         allocations = {}
@@ -9839,6 +9848,9 @@ def get_all_employee_leave_allocations():
                     "comp_off": float(record.get("crc6f_compoff", 0) or 0),
                     "total": float(record.get("crc6f_total", 0) or 0)
                 }
+                print(f"[DEBUG] Added allocation for {emp_id}: CL={allocations[emp_id]['casual_leave']}, SL={allocations[emp_id]['sick_leave']}")
+            else:
+                print(f"[WARN] Record without employee_id: {record}")
         
         print(f"[OK] Returning {len(allocations)} employee allocations")
         print(f"{'='*70}\n")
