@@ -2113,8 +2113,8 @@ export const renderInboxPage = async () => {
     // Update notification badge
     await updateNotificationBadge();
 
-    const isAdmin = isManagerOrAdmin();
-    console.log('👤 User is admin/manager:', isAdmin);
+    const isAdmin = isAdminUser();
+    console.log('👤 User is admin:', isAdmin);
 
     // Initial static content
     const content = `
@@ -3812,7 +3812,7 @@ const loadInboxLeaves = async () => {
 };
 
 const loadInboxTimesheets = async () => {
-    const isAdmin = isManagerOrAdmin();
+    const isAdmin = isAdminUser();
     const listContainer = document.querySelector('.inbox-list');
 
     if (!listContainer) return;
