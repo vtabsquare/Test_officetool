@@ -138,7 +138,16 @@ const attachInternEvents = () => {
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       internSearch = e.target.value || '';
-      renderInternsPage(internSearch, 1);
+      const cursorPosition = e.target.selectionStart;
+      
+      renderInternsPage(internSearch, 1).then(() => {
+        // Restore focus and cursor position after re-render
+        const newInput = document.getElementById('intern-search-input');
+        if (newInput) {
+          newInput.focus();
+          newInput.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      });
     });
   }
 
