@@ -3,7 +3,7 @@ import { state } from "../state.js";
 import { renderModal, closeModal } from "../components/modal.js";
 import { API_BASE_URL } from '../config.js';
 
-const API_BASE = `${API_BASE_URL}/assets`;
+const API_BASE = `${API_BASE_URL}/api/assets`;
 
 // -------------------- FETCH ASSETS --------------------
 export const fetchAssets = async () => {

@@ -8895,7 +8895,7 @@ def delete_hierarchy(record_id):
 
 # ================== ASSET MANAGEMENT ROUTES ==================
 # ================== ASSET MANAGEMENT ROUTES ==================
-@app.route("/assets", methods=["GET"])
+@app.route("/api/assets", methods=["GET"])
 def fetch_assets():
     try:
         data = get_all_assets()
@@ -8903,7 +8903,7 @@ def fetch_assets():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/assets", methods=["POST"])
+@app.route("/api/assets", methods=["POST"])
 def add_asset():
     try:
         data = request.json
@@ -8916,7 +8916,7 @@ def add_asset():
         return jsonify({"error": str(e)}), 500
 
 # Update by asset id (crc6f_assetid)
-@app.route("/assets/update/<asset_id>", methods=["PATCH"])
+@app.route("/api/assets/update/<asset_id>", methods=["PATCH"])
 def edit_asset(asset_id):
     try:
         data = request.json
@@ -8926,7 +8926,7 @@ def edit_asset(asset_id):
         return jsonify({"error": str(e)}), 500
 
 # Delete by asset id
-@app.route("/assets/delete/<asset_id>", methods=["DELETE"])
+@app.route("/api/assets/delete/<asset_id>", methods=["DELETE"])
 def remove_asset(asset_id):
     try:
         result = delete_asset_by_assetid(asset_id)
