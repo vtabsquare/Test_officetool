@@ -13,18 +13,28 @@ export async function getHolidays() {
   return [];
 }
 export async function createHoliday(payload) {
-  await fetch(`${BASE_URL}/api/holidays`, {
+  const res = await fetch(`${BASE_URL}/api/holidays`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.message || `Failed to create holiday: ${res.status}`);
+  }
+  return await res.json().catch(() => ({}));
 }
 export async function updateHoliday(id, payload) {
-  await fetch(`${BASE_URL}/api/holidays/${id}`, {
+  const res = await fetch(`${BASE_URL}/api/holidays/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.message || `Failed to update holiday: ${res.status}`);
+  }
+  return await res.json().catch(() => ({}));
 }
 export async function deleteHoliday(id) {
   const res = await fetch(`${BASE_URL}/api/holidays/${id}`, {
