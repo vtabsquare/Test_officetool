@@ -212,7 +212,23 @@ const attachTeamTsEvents = () => {
     if (next) next.onclick = () => { const d = new Date(window.__teamTsMonth || new Date()); d.setMonth(d.getMonth() + 1); window.__teamTsMonth = d; renderTeamTimesheetPage(); };
     const search = document.getElementById('tt-search');
     if (search) {
-        let id; search.addEventListener('input', (e) => { clearTimeout(id); const v = e.target.value; id = setTimeout(() => { window.__ttSearch = v; renderTeamTimesheetPage(); }, 250); });
+        let id; 
+        search.addEventListener('input', (e) => { 
+            clearTimeout(id); 
+            const v = e.target.value;
+            const cursorPosition = e.target.selectionStart;
+            id = setTimeout(() => { 
+                window.__ttSearch = v; 
+                renderTeamTimesheetPage().then(() => {
+                    // Restore focus and cursor position after re-render
+                    const newSearch = document.getElementById('tt-search');
+                    if (newSearch) {
+                        newSearch.focus();
+                        newSearch.setSelectionRange(cursorPosition, cursorPosition);
+                    }
+                });
+            }, 250); 
+        });
     }
     // Allow only L2/L3 (managers/admins) to edit team timesheet cells
     const canEditTeamTimesheet = () => {
