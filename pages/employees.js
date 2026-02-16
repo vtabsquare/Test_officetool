@@ -487,7 +487,7 @@ const parseCSVText = (text) => {
 };
 
 // Full-page view for Bulk Delete
-export const renderHolidaysPage = async () => {
+export const renderBulkDeletePage = async () => {
 
     bulkDeleteFilter = '';
     bulkDeleteSelected = new Set();
