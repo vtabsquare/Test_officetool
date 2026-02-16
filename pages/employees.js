@@ -413,7 +413,16 @@ export const renderEmployeesPage = async (filter = '', page = empCurrentPage) =>
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             const searchValue = e.target.value || '';
-            renderEmployeesPage(searchValue, 1);
+            const cursorPosition = e.target.selectionStart;
+            
+            renderEmployeesPage(searchValue, 1).then(() => {
+                // Restore focus and cursor position after re-render
+                const newInput = document.getElementById('employee-search-input');
+                if (newInput) {
+                    newInput.focus();
+                    newInput.setSelectionRange(cursorPosition, cursorPosition);
+                }
+            });
         });
     }
 } // Added closing bracket here
