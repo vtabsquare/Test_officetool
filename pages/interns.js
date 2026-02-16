@@ -244,8 +244,13 @@ export const renderInternsPage = async (filter = internSearch, page = internPage
 
   let fetchedItems = [];
   try {
-    const { items, total, page: curPage, pageSize } = await listInterns(page, INTERN_PAGE_SIZE);
-    internPage = curPage || page;
+    // When searching, fetch all interns; otherwise use pagination
+    const fetchAll = filter && filter.trim().length > 0;
+    const fetchPageSize = fetchAll ? 10000 : INTERN_PAGE_SIZE;
+    const fetchPage = fetchAll ? 1 : page;
+    
+    const { items, total, page: curPage, pageSize } = await listInterns(fetchPage, fetchPageSize);
+    internPage = fetchAll ? 1 : (curPage || page);
     internPageSize = pageSize || INTERN_PAGE_SIZE;
     fetchedItems = items || [];
     internTotalCount = typeof total === 'number' ? total : fetchedItems.length;
