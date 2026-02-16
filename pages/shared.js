@@ -2113,8 +2113,8 @@ export const renderInboxPage = async () => {
     // Update notification badge
     await updateNotificationBadge();
 
-    const isAdmin = isAdminUser();
-    console.log('👤 User is admin:', isAdmin);
+    const isAdmin = isManagerOrAdmin();
+    console.log('👤 User is admin/manager:', isAdmin);
 
     // Initial static content
     const content = `
@@ -3806,13 +3806,6 @@ const loadInboxLeaves = async () => {
             <div class="placeholder-text">
                 <i class="fa-solid fa-exclamation-triangle fa-3x" style="color:#e74c3c; margin-bottom: 1rem;"></i>
                 <p>Error loading leave requests.</p>
-            </div>
-        `;
-    }
-};
-
-const loadInboxTimesheets = async () => {
-    const isAdmin = isAdminUser();
     const listContainer = document.querySelector('.inbox-list');
 
     if (!listContainer) return;
