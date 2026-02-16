@@ -3736,7 +3736,6 @@ const loadInboxLeaves = async () => {
             const status = leave.status || 'Pending';
             const paidUnpaid = leave.paid_unpaid || 'Paid';
             const rejectionReason = leave.rejection_reason || leave.crc6f_rejectionreason || '';
-            const reason = leave.reason || leave.crc6f_reason || '';
 
             // Debug logging for rejected leaves
             if (status.toLowerCase() === 'rejected') {
@@ -3765,7 +3764,6 @@ const loadInboxLeaves = async () => {
                         <p><strong>Period:</strong> ${startDate} to ${endDate} (${totalDays} day${totalDays > 1 ? 's' : ''})</p>
                         <p><strong>Type:</strong> ${paidUnpaid}</p>
                         <p><strong>Leave ID:</strong> ${leaveId}</p>
-                        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
                         ${isRejected && rejectionReason ? `
                             <div class="rejection-reason-box" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-top: 12px; border-radius: 4px;">
                                 <strong style="color: #856404;"><i class="fa-solid fa-info-circle"></i> Rejection Reason:</strong>
